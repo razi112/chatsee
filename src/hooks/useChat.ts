@@ -1,0 +1,290 @@
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
+
+export interface Profile {
+  id: string;
+  email: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  status: string | null;
+  is_online: boolean | null;
+  last_seen: string | null;
+}
+
+export interface Message {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  content: string;
+  is_read: boolean | null;
+  created_at: string;
+}
+
+export interface Conversation {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  participants: Profile[];
+  lastMessage?: Message;
+}
+
+export function useChat() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [currentConversation, setCurrentConversation] = useState<Conversation | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch all profiles for searching
+  const fetchProfiles = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .neq('id', user?.id || '');
+
+    if (error) {
+      console.error('Error fetching profiles:', error);
+    } else {
+      setProfiles(data || []);
+    }
+  }, [user?.id]);
+
+  // Fetch user's conversations
+  const fetchConversations = useCallback(async () => {
+    if (!user) return;
+
+    const { data: participantData, error: participantError } = await supabase
+      .from('conversation_participants')
+      .select('conversation_id')
+      .eq('user_id', user.id);
+
+    if (participantError) {
+      console.error('Error fetching conversations:', participantError);
+      return;
+    }
+
+    const conversationIds = participantData?.map(p => p.conversation_id) || [];
+    
+    if (conversationIds.length === 0) {
+      setConversations([]);
+      setLoading(false);
+      return;
+    }
+
+    // Fetch conversations with participants
+    const conversationsWithParticipants: Conversation[] = [];
+
+    for (const convId of conversationIds) {
+      const { data: convData } = await supabase
+        .from('conversations')
+        .select('*')
+        .eq('id', convId)
+        .single();
+
+      const { data: participants } = await supabase
+        .from('conversation_participants')
+        .select('user_id')
+        .eq('conversation_id', convId);
+
+      const participantIds = participants?.map(p => p.user_id) || [];
+      
+      const { data: participantProfiles } = await supabase
+        .from('profiles')
+        .select('*')
+        .in('id', participantIds);
+
+      // Get last message
+      const { data: lastMessageData } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('conversation_id', convId)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (convData) {
+        conversationsWithParticipants.push({
+          ...convData,
+          participants: participantProfiles || [],
+          lastMessage: lastMessageData?.[0],
+        });
+      }
+    }
+
+    // Sort by last message time
+    conversationsWithParticipants.sort((a, b) => {
+      const aTime = a.lastMessage?.created_at || a.updated_at;
+      const bTime = b.lastMessage?.created_at || b.updated_at;
+      return new Date(bTime).getTime() - new Date(aTime).getTime();
+    });
+
+    setConversations(conversationsWithParticipants);
+    setLoading(false);
+  }, [user]);
+
+  // Fetch messages for current conversation
+  const fetchMessages = useCallback(async (conversationId: string) => {
+    const { data, error } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('conversation_id', conversationId)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching messages:', error);
+    } else {
+      setMessages(data || []);
+    }
+  }, []);
+
+  // Start or get existing conversation with a user
+  const startConversation = useCallback(async (otherUserId: string) => {
+    if (!user) return null;
+
+    // Check if conversation already exists
+    const existingConv = conversations.find(conv => 
+      conv.participants.some(p => p.id === otherUserId) &&
+      conv.participants.length === 2
+    );
+
+    if (existingConv) {
+      setCurrentConversation(existingConv);
+      fetchMessages(existingConv.id);
+      return existingConv;
+    }
+
+    // Create new conversation
+    const { data: newConv, error: convError } = await supabase
+      .from('conversations')
+      .insert({})
+      .select()
+      .single();
+
+    if (convError || !newConv) {
+      toast({
+        title: 'Error',
+        description: 'Failed to create conversation',
+        variant: 'destructive',
+      });
+      return null;
+    }
+
+    // Add participants
+    const { error: participantError } = await supabase
+      .from('conversation_participants')
+      .insert([
+        { conversation_id: newConv.id, user_id: user.id },
+        { conversation_id: newConv.id, user_id: otherUserId },
+      ]);
+
+    if (participantError) {
+      toast({
+        title: 'Error',
+        description: 'Failed to add participants',
+        variant: 'destructive',
+      });
+      return null;
+    }
+
+    // Get other user's profile
+    const { data: otherProfile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', otherUserId)
+      .single();
+
+    const { data: myProfile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+    const conversation: Conversation = {
+      ...newConv,
+      participants: [myProfile, otherProfile].filter(Boolean) as Profile[],
+    };
+
+    setConversations(prev => [conversation, ...prev]);
+    setCurrentConversation(conversation);
+    setMessages([]);
+
+    return conversation;
+  }, [user, conversations, fetchMessages, toast]);
+
+  // Send a message
+  const sendMessage = useCallback(async (content: string) => {
+    if (!user || !currentConversation) return;
+
+    const { data, error } = await supabase
+      .from('messages')
+      .insert({
+        conversation_id: currentConversation.id,
+        sender_id: user.id,
+        content,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to send message',
+        variant: 'destructive',
+      });
+    }
+  }, [user, currentConversation, toast]);
+
+  // Set up real-time subscription for messages
+  useEffect(() => {
+    if (!currentConversation) return;
+
+    const channel = supabase
+      .channel(`messages-${currentConversation.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversation_id=eq.${currentConversation.id}`,
+        },
+        (payload) => {
+          setMessages(prev => [...prev, payload.new as Message]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentConversation]);
+
+  // Initial data fetch
+  useEffect(() => {
+    if (user) {
+      fetchConversations();
+      fetchProfiles();
+    }
+  }, [user, fetchConversations, fetchProfiles]);
+
+  // Select a conversation
+  const selectConversation = useCallback((conversation: Conversation) => {
+    setCurrentConversation(conversation);
+    fetchMessages(conversation.id);
+  }, [fetchMessages]);
+
+  return {
+    conversations,
+    currentConversation,
+    messages,
+    profiles,
+    loading,
+    selectConversation,
+    startConversation,
+    sendMessage,
+    fetchConversations,
+  };
+}
