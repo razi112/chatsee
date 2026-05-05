@@ -151,6 +151,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_direct_conversation: {
+        Args: { _other_user: string }
+        Returns: string
+      }
       is_conversation_participant: {
         Args: { _conversation_id: string; _user_id: string }
         Returns: boolean

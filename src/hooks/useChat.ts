@@ -156,14 +156,11 @@ export function useChat() {
       return existingConv;
     }
 
-    // Create new conversation
-    const { data: newConv, error: convError } = await supabase
-      .from('conversations')
-      .insert({})
-      .select()
-      .single();
+    // Create or get conversation via RPC (avoids RLS races)
+    const { data: convId, error: rpcError } = await supabase
+      .rpc('create_direct_conversation', { _other_user: otherUserId });
 
-    if (convError || !newConv) {
+    if (rpcError || !convId) {
       toast({
         title: 'Error',
         description: 'Failed to create conversation',
@@ -172,20 +169,14 @@ export function useChat() {
       return null;
     }
 
-    // Add participants
-    const { error: participantError } = await supabase
-      .from('conversation_participants')
-      .insert([
-        { conversation_id: newConv.id, user_id: user.id },
-        { conversation_id: newConv.id, user_id: otherUserId },
-      ]);
+    const { data: newConv } = await supabase
+      .from('conversations')
+      .select('*')
+      .eq('id', convId)
+      .single();
 
-    if (participantError) {
-      toast({
-        title: 'Error',
-        description: 'Failed to add participants',
-        variant: 'destructive',
-      });
+    if (!newConv) {
+      toast({ title: 'Error', description: 'Failed to load conversation', variant: 'destructive' });
       return null;
     }
 
