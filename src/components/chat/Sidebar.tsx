@@ -29,6 +29,12 @@ export default function Sidebar({
   const { user, signOut } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewChat, setShowNewChat] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const myProfile = profiles.find(p => p.id === user?.id);
+  // Note: profiles list excludes current user, so fall back to user metadata
+  const myAvatarUrl = myProfile?.avatar_url || (user?.user_metadata?.avatar_url as string | undefined);
+  const myInitials = ((user?.user_metadata?.display_name as string) || user?.email || 'U')
+    .split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
   const filteredConversations = conversations.filter(conv => {
     const otherParticipant = conv.participants.find(p => p.id !== user?.id);
