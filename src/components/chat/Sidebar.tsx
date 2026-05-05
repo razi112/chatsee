@@ -9,6 +9,7 @@ import { Conversation, Profile } from '@/hooks/useChat';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import NewChatDialog from './NewChatDialog';
+import ProfileSettingsDialog from './ProfileSettingsDialog';
 
 interface SidebarProps {
   conversations: Conversation[];
@@ -28,6 +29,12 @@ export default function Sidebar({
   const { user, signOut } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewChat, setShowNewChat] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const myProfile = profiles.find(p => p.id === user?.id);
+  // Note: profiles list excludes current user, so fall back to user metadata
+  const myAvatarUrl = myProfile?.avatar_url || (user?.user_metadata?.avatar_url as string | undefined);
+  const myInitials = ((user?.user_metadata?.display_name as string) || user?.email || 'U')
+    .split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
   const filteredConversations = conversations.filter(conv => {
     const otherParticipant = conv.participants.find(p => p.id !== user?.id);
@@ -50,18 +57,25 @@ export default function Sidebar({
     <div className="w-full md:w-80 lg:w-96 h-full flex flex-col bg-sidebar border-r border-border">
       {/* Header */}
       <div className="p-4 flex items-center justify-between border-b border-border">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-            <MessageCircle className="w-5 h-5 text-primary" />
-          </div>
-          <span className="font-semibold text-lg text-foreground">Chats</span>
-        </div>
+        <button
+          onClick={() => setShowProfile(true)}
+          className="flex items-center gap-3 group rounded-lg p-1 -m-1 hover:bg-secondary transition-colors"
+        >
+          <Avatar className="w-10 h-10">
+            <AvatarImage src={myAvatarUrl || undefined} />
+            <AvatarFallback className="bg-primary/20 text-primary font-medium">
+              {myInitials}
+            </AvatarFallback>
+          </Avatar>
+          <span className="font-semibold text-foreground">My Profile</span>
+        </button>
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"
             size="icon"
             className="text-muted-foreground hover:text-foreground hover:bg-secondary"
             onClick={() => setShowNewChat(true)}
+            title="New chat"
           >
             <Plus className="w-5 h-5" />
           </Button>
@@ -69,7 +83,17 @@ export default function Sidebar({
             variant="ghost"
             size="icon"
             className="text-muted-foreground hover:text-foreground hover:bg-secondary"
+            onClick={() => setShowProfile(true)}
+            title="Settings"
+          >
+            <Settings className="w-5 h-5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground hover:text-foreground hover:bg-secondary"
             onClick={signOut}
+            title="Sign out"
           >
             <LogOut className="w-5 h-5" />
           </Button>
@@ -161,6 +185,9 @@ export default function Sidebar({
         profiles={profiles}
         onSelectUser={onStartConversation}
       />
+
+      {/* Profile / Settings Dialog */}
+      <ProfileSettingsDialog open={showProfile} onOpenChange={setShowProfile} />
     </div>
   );
 }
