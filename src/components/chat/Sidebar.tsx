@@ -57,18 +57,25 @@ export default function Sidebar({
     <div className="w-full md:w-80 lg:w-96 h-full flex flex-col bg-sidebar border-r border-border">
       {/* Header */}
       <div className="p-4 flex items-center justify-between border-b border-border">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-            <MessageCircle className="w-5 h-5 text-primary" />
-          </div>
-          <span className="font-semibold text-lg text-foreground">Chats</span>
-        </div>
+        <button
+          onClick={() => setShowProfile(true)}
+          className="flex items-center gap-3 group rounded-lg p-1 -m-1 hover:bg-secondary transition-colors"
+        >
+          <Avatar className="w-10 h-10">
+            <AvatarImage src={myAvatarUrl || undefined} />
+            <AvatarFallback className="bg-primary/20 text-primary font-medium">
+              {myInitials}
+            </AvatarFallback>
+          </Avatar>
+          <span className="font-semibold text-foreground">My Profile</span>
+        </button>
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"
             size="icon"
             className="text-muted-foreground hover:text-foreground hover:bg-secondary"
             onClick={() => setShowNewChat(true)}
+            title="New chat"
           >
             <Plus className="w-5 h-5" />
           </Button>
@@ -76,7 +83,17 @@ export default function Sidebar({
             variant="ghost"
             size="icon"
             className="text-muted-foreground hover:text-foreground hover:bg-secondary"
+            onClick={() => setShowProfile(true)}
+            title="Settings"
+          >
+            <Settings className="w-5 h-5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground hover:text-foreground hover:bg-secondary"
             onClick={signOut}
+            title="Sign out"
           >
             <LogOut className="w-5 h-5" />
           </Button>
