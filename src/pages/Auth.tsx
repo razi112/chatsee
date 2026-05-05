@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { MessageCircle, Mail, Lock, User, Loader2 } from 'lucide-react';
 import { z } from 'zod';
+import { lovable } from '@/integrations/lovable';
 
 const authSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
