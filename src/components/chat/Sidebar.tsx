@@ -185,6 +185,9 @@ export default function Sidebar({
         profiles={profiles}
         onSelectUser={onStartConversation}
       />
+
+      {/* Profile / Settings Dialog */}
+      <ProfileSettingsDialog open={showProfile} onOpenChange={setShowProfile} />
     </div>
   );
 }
