@@ -9,6 +9,7 @@ import { Conversation, Profile } from '@/hooks/useChat';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import NewChatDialog from './NewChatDialog';
+import ProfileSettingsDialog from './ProfileSettingsDialog';
 
 interface SidebarProps {
   conversations: Conversation[];
