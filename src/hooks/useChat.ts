@@ -39,6 +39,7 @@ export function useChat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Fetch all profiles for searching
   const fetchProfiles = useCallback(async () => {
