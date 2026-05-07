@@ -282,7 +282,6 @@ export function useChat() {
   }, [user]);
 
   // Global notification subscription for all incoming messages
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   useEffect(() => {
     if (typeof window !== 'undefined' && !audioRef.current) {
       audioRef.current = new Audio(notificationSound);
