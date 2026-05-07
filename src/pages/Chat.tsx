@@ -13,6 +13,7 @@ export default function Chat() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [showChat, setShowChat] = useState(false);
+  usePresence();
 
   const {
     conversations,
