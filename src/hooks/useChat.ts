@@ -139,8 +139,17 @@ export function useChat() {
       console.error('Error fetching messages:', error);
     } else {
       setMessages(data || []);
+      // Mark incoming messages as read
+      if (user) {
+        await supabase
+          .from('messages')
+          .update({ is_read: true })
+          .eq('conversation_id', conversationId)
+          .neq('sender_id', user.id)
+          .eq('is_read', false);
+      }
     }
-  }, []);
+  }, [user]);
 
   // Start or get existing conversation with a user
   const startConversation = useCallback(async (otherUserId: string) => {
@@ -244,9 +253,29 @@ export function useChat() {
           table: 'messages',
           filter: `conversation_id=eq.${currentConversation.id}`,
         },
-        (payload) => {
+        async (payload) => {
           const msg = payload.new as Message;
           setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
+          // Mark as read if it's incoming and we're viewing the conversation
+          if (user && msg.sender_id !== user.id) {
+            await supabase
+              .from('messages')
+              .update({ is_read: true })
+              .eq('id', msg.id);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversation_id=eq.${currentConversation.id}`,
+        },
+        (payload) => {
+          const msg = payload.new as Message;
+          setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, ...msg } : m));
         }
       )
       .subscribe();
@@ -254,7 +283,7 @@ export function useChat() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [currentConversation]);
+  }, [currentConversation, user]);
 
   // Real-time profile updates (online status, avatar, name)
   useEffect(() => {

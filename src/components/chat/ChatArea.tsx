@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Phone, Video, MoreVertical, ArrowLeft, Smile } from 'lucide-react';
+import { Send, Phone, Video, MoreVertical, ArrowLeft, Smile, Check, CheckCheck } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -172,10 +172,19 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
                           {message.content}
                         </p>
                         <span className={cn(
-                          "text-[10px] float-right mt-1 ml-2",
+                          "text-[10px] float-right mt-1 ml-2 inline-flex items-center gap-1",
                           isMine ? "text-primary-foreground/70" : "text-muted-foreground"
                         )}>
                           {formatMessageTime(message.created_at)}
+                          {isMine && (
+                            message.is_read ? (
+                              <CheckCheck className="w-3.5 h-3.5 text-sky-400" />
+                            ) : otherParticipant.is_online ? (
+                              <CheckCheck className="w-3.5 h-3.5" />
+                            ) : (
+                              <Check className="w-3.5 h-3.5" />
+                            )
+                          )}
                         </span>
                       </div>
                     </div>
