@@ -139,8 +139,17 @@ export function useChat() {
       console.error('Error fetching messages:', error);
     } else {
       setMessages(data || []);
+      // Mark incoming messages as read
+      if (user) {
+        await supabase
+          .from('messages')
+          .update({ is_read: true })
+          .eq('conversation_id', conversationId)
+          .neq('sender_id', user.id)
+          .eq('is_read', false);
+      }
     }
-  }, []);
+  }, [user]);
 
   // Start or get existing conversation with a user
   const startConversation = useCallback(async (otherUserId: string) => {
