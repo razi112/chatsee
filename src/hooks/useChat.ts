@@ -255,6 +255,31 @@ export function useChat() {
     };
   }, [currentConversation]);
 
+  // Real-time profile updates (online status, avatar, name)
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel('profiles-presence')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'profiles' },
+        (payload) => {
+          const updated = payload.new as Profile;
+          setProfiles(prev => prev.map(p => p.id === updated.id ? { ...p, ...updated } : p));
+          setConversations(prev => prev.map(c => ({
+            ...c,
+            participants: c.participants.map(p => p.id === updated.id ? { ...p, ...updated } : p),
+          })));
+          setCurrentConversation(prev => prev ? {
+            ...prev,
+            participants: prev.participants.map(p => p.id === updated.id ? { ...p, ...updated } : p),
+          } : prev);
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user]);
+
   // Global notification subscription for all incoming messages
   const audioRef = useRef<HTMLAudioElement | null>(null);
   useEffect(() => {
