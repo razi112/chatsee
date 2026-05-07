@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import notificationSound from '@/assets/iphone_notification.mp3';
 
 export interface Profile {
   id: string;
@@ -243,7 +244,8 @@ export function useChat() {
           filter: `conversation_id=eq.${currentConversation.id}`,
         },
         (payload) => {
-          setMessages(prev => [...prev, payload.new as Message]);
+          const msg = payload.new as Message;
+          setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
         }
       )
       .subscribe();
@@ -252,6 +254,90 @@ export function useChat() {
       supabase.removeChannel(channel);
     };
   }, [currentConversation]);
+
+  // Global notification subscription for all incoming messages
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !audioRef.current) {
+      audioRef.current = new Audio(notificationSound);
+      audioRef.current.preload = 'auto';
+      audioRef.current.volume = 0.8;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel(`global-messages-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages' },
+        async (payload) => {
+          const msg = payload.new as Message;
+          if (msg.sender_id === user.id) return;
+
+          // Check if user is participant of this conversation
+          const { data: isParticipant } = await supabase
+            .from('conversation_participants')
+            .select('id')
+            .eq('conversation_id', msg.conversation_id)
+            .eq('user_id', user.id)
+            .maybeSingle();
+          if (!isParticipant) return;
+
+          // Play sound
+          try {
+            if (audioRef.current) {
+              audioRef.current.currentTime = 0;
+              await audioRef.current.play();
+            }
+          } catch (e) {
+            // Autoplay may be blocked until user interacts
+          }
+
+          // Get sender name
+          const { data: sender } = await supabase
+            .from('profiles')
+            .select('display_name, email, avatar_url')
+            .eq('id', msg.sender_id)
+            .maybeSingle();
+
+          const senderName = sender?.display_name || sender?.email?.split('@')[0] || 'New message';
+
+          // Show toast only if not currently viewing this conversation
+          if (currentConversation?.id !== msg.conversation_id) {
+            toast({
+              title: senderName,
+              description: msg.content.length > 80 ? msg.content.slice(0, 80) + '…' : msg.content,
+            });
+          }
+
+          // Browser notification
+          if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
+            new Notification(senderName, {
+              body: msg.content,
+              icon: sender?.avatar_url || '/favicon.ico',
+            });
+          }
+
+          // Refresh conversations list to update last message
+          fetchConversations();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, currentConversation, toast, fetchConversations]);
+
+  // Request notification permission
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
 
   // Initial data fetch
   useEffect(() => {
