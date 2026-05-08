@@ -19,10 +19,27 @@ interface ChatAreaProps {
 export default function ChatArea({ conversation, messages, onSendMessage, onBack }: ChatAreaProps) {
   const { user } = useAuth();
   const [newMessage, setNewMessage] = useState('');
+  const [showDebug, setShowDebug] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const receiptUpdatesRef = useRef<Map<string, { is_read: boolean | null; at: number }>>(new Map());
+  const [, forceTick] = useState(0);
 
   const otherParticipant = conversation?.participants.find(p => p.id !== user?.id);
+
+  // Track receipt (is_read) update timestamps per message id
+  useEffect(() => {
+    const map = receiptUpdatesRef.current;
+    let changed = false;
+    messages.forEach(m => {
+      const prev = map.get(m.id);
+      if (!prev || prev.is_read !== m.is_read) {
+        map.set(m.id, { is_read: m.is_read, at: Date.now() });
+        changed = true;
+      }
+    });
+    if (changed) forceTick(t => t + 1);
+  }, [messages]);
 
   useEffect(() => {
     // Scroll to bottom when messages change
