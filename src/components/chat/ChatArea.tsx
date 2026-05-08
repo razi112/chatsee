@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Phone, Video, MoreVertical, ArrowLeft, Smile, Check, CheckCheck } from 'lucide-react';
+import { Send, Phone, Video, MoreVertical, ArrowLeft, Smile, Check, CheckCheck, Bug } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -19,10 +19,27 @@ interface ChatAreaProps {
 export default function ChatArea({ conversation, messages, onSendMessage, onBack }: ChatAreaProps) {
   const { user } = useAuth();
   const [newMessage, setNewMessage] = useState('');
+  const [showDebug, setShowDebug] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const receiptUpdatesRef = useRef<Map<string, { is_read: boolean | null; at: number }>>(new Map());
+  const [, forceTick] = useState(0);
 
   const otherParticipant = conversation?.participants.find(p => p.id !== user?.id);
+
+  // Track receipt (is_read) update timestamps per message id
+  useEffect(() => {
+    const map = receiptUpdatesRef.current;
+    let changed = false;
+    messages.forEach(m => {
+      const prev = map.get(m.id);
+      if (!prev || prev.is_read !== m.is_read) {
+        map.set(m.id, { is_read: m.is_read, at: Date.now() });
+        changed = true;
+      }
+    });
+    if (changed) forceTick(t => t + 1);
+  }, [messages]);
 
   useEffect(() => {
     // Scroll to bottom when messages change
@@ -120,6 +137,18 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
           </p>
         </div>
         <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setShowDebug(v => !v)}
+            className={cn(
+              "text-muted-foreground hover:text-foreground",
+              showDebug && "text-primary"
+            )}
+            title="Toggle debug panel"
+          >
+            <Bug className="w-5 h-5" />
+          </Button>
           <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
             <Video className="w-5 h-5" />
           </Button>
@@ -151,12 +180,14 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
                   const showTail = index === 0 || 
                     group.messages[index - 1]?.sender_id !== message.sender_id;
 
+                  const receipt = receiptUpdatesRef.current.get(message.id);
+                  const delivered = isMine && !!otherParticipant.is_online;
                   return (
                     <div
                       key={message.id}
                       className={cn(
-                        "flex animate-fade-in",
-                        isMine ? "justify-end" : "justify-start"
+                        "flex flex-col animate-fade-in",
+                        isMine ? "items-end" : "items-start"
                       )}
                     >
                       <div
@@ -187,6 +218,17 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
                           )}
                         </span>
                       </div>
+                      {showDebug && (
+                        <div className={cn(
+                          "mt-1 max-w-[70%] px-2 py-1 rounded border border-dashed border-border bg-card/70 text-[10px] font-mono text-muted-foreground space-y-0.5",
+                          isMine ? "text-right" : "text-left"
+                        )}>
+                          <div>id: {message.id.slice(0, 8)}…</div>
+                          <div>is_read: <span className={message.is_read ? "text-online" : "text-foreground"}>{String(!!message.is_read)}</span></div>
+                          <div>delivered: <span className={delivered ? "text-online" : "text-foreground"}>{isMine ? String(delivered) : 'n/a'}</span></div>
+                          <div>receipt updated: {receipt ? format(new Date(receipt.at), 'HH:mm:ss.SSS') : '—'}</div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
