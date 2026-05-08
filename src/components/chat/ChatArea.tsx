@@ -180,12 +180,14 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
                   const showTail = index === 0 || 
                     group.messages[index - 1]?.sender_id !== message.sender_id;
 
+                  const receipt = receiptUpdatesRef.current.get(message.id);
+                  const delivered = isMine && !!otherParticipant.is_online;
                   return (
                     <div
                       key={message.id}
                       className={cn(
-                        "flex animate-fade-in",
-                        isMine ? "justify-end" : "justify-start"
+                        "flex flex-col animate-fade-in",
+                        isMine ? "items-end" : "items-start"
                       )}
                     >
                       <div
@@ -216,6 +218,17 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
                           )}
                         </span>
                       </div>
+                      {showDebug && (
+                        <div className={cn(
+                          "mt-1 max-w-[70%] px-2 py-1 rounded border border-dashed border-border bg-card/70 text-[10px] font-mono text-muted-foreground space-y-0.5",
+                          isMine ? "text-right" : "text-left"
+                        )}>
+                          <div>id: {message.id.slice(0, 8)}…</div>
+                          <div>is_read: <span className={message.is_read ? "text-online" : "text-foreground"}>{String(!!message.is_read)}</span></div>
+                          <div>delivered: <span className={delivered ? "text-online" : "text-foreground"}>{isMine ? String(delivered) : 'n/a'}</span></div>
+                          <div>receipt updated: {receipt ? format(new Date(receipt.at), 'HH:mm:ss.SSS') : '—'}</div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
