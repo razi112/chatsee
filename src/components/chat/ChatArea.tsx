@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Phone, Video, MoreVertical, ArrowLeft, Smile, Check, CheckCheck } from 'lucide-react';
+import { Send, Phone, Video, MoreVertical, ArrowLeft, Smile, Check, CheckCheck, Bug } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
