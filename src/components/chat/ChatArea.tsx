@@ -319,11 +319,64 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
           <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
             <Phone className="w-5 h-5" />
           </Button>
-          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
-            <MoreVertical className="w-5 h-5" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+                <MoreVertical className="w-5 h-5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onClick={() => setConfirm('clear')}>
+                <Eraser className="w-4 h-4 mr-2" /> Clear chat
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setConfirm('delete')}>
+                <Trash2 className="w-4 h-4 mr-2" /> Delete chat
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {blocked ? (
+                <DropdownMenuItem onClick={() => { setBlocked(otherParticipant.id, false); toast({ title: 'User unblocked' }); }}>
+                  <ShieldOff className="w-4 h-4 mr-2" /> Unblock user
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem onClick={() => setConfirm('block')} className="text-destructive focus:text-destructive">
+                  <Ban className="w-4 h-4 mr-2" /> Block user
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
+
+      <AlertDialog open={confirm !== null} onOpenChange={(o) => !o && setConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirm === 'clear' && 'Clear this chat?'}
+              {confirm === 'delete' && 'Delete this chat?'}
+              {confirm === 'block' && `Block ${otherParticipant.display_name || otherParticipant.email}?`}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirm === 'clear' && 'Messages will be hidden from your view. The other participant will still see them.'}
+              {confirm === 'delete' && 'This chat will be removed from your list. New incoming messages will bring it back.'}
+              {confirm === 'block' && 'You will not be able to send messages to this user until you unblock them.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (!conversation) return;
+                if (confirm === 'clear') { clearChat(conversation.id); toast({ title: 'Chat cleared' }); }
+                if (confirm === 'delete') { deleteChat(conversation.id); toast({ title: 'Chat deleted' }); onBack?.(); }
+                if (confirm === 'block') { setBlocked(otherParticipant.id, true); toast({ title: 'User blocked' }); }
+                setConfirm(null);
+              }}
+            >
+              Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {showDebug && (
         <div className="px-4 py-2 bg-card/70 border-b border-border flex items-center gap-2 text-[11px] font-mono text-muted-foreground">
