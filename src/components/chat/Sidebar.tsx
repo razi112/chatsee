@@ -37,7 +37,7 @@ export default function Sidebar({
   const myInitials = ((user?.user_metadata?.display_name as string) || user?.email || 'U')
     .split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
-  const [actionsVersion, setActionsVersion] = useState(0);
+  const [, setActionsVersion] = useState(0);
   useEffect(() => onChatActionsChanged(() => setActionsVersion(v => v + 1)), []);
 
   const filteredConversations = conversations.filter(conv => {
