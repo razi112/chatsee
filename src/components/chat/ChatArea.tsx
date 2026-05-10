@@ -156,7 +156,7 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
       const s = v === null || v === undefined ? '' : String(v);
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
-    const rows = log.map(e => headers.map(h => escape((e as Record<string, unknown>)[h])).join(','));
+    const rows = log.map(e => headers.map(h => escape((e as unknown as Record<string, unknown>)[h])).join(','));
     downloadFile(`tick-log-${Date.now()}.csv`, [headers.join(','), ...rows].join('\n'), 'text/csv');
   };
 
