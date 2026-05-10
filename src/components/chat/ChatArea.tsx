@@ -58,7 +58,7 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
   const [, forceTick] = useState(0);
   const [confirm, setConfirm] = useState<null | 'clear' | 'delete' | 'block'>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
-  const [actionsVersion, setActionsVersion] = useState(0);
+  const [, setActionsVersion] = useState(0);
 
   useEffect(() => onChatActionsChanged(() => setActionsVersion(v => v + 1)), []);
 
