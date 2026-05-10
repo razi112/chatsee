@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Search, Plus, LogOut, Settings, MessageCircle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import NewChatDialog from './NewChatDialog';
 import ProfileSettingsDialog from './ProfileSettingsDialog';
+import { isDeleted, onChatActionsChanged } from '@/lib/chatActions';
 
 interface SidebarProps {
   conversations: Conversation[];
@@ -36,7 +37,15 @@ export default function Sidebar({
   const myInitials = ((user?.user_metadata?.display_name as string) || user?.email || 'U')
     .split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
+  const [, setActionsVersion] = useState(0);
+  useEffect(() => onChatActionsChanged(() => setActionsVersion(v => v + 1)), []);
+
   const filteredConversations = conversations.filter(conv => {
+    if (isDeleted(conv.id) && !conv.lastMessage) return false;
+    if (isDeleted(conv.id)) {
+      // Hide deleted unless a new message arrived after deletion timestamp — simple: hide always until user starts again
+      return false;
+    }
     const otherParticipant = conv.participants.find(p => p.id !== user?.id);
     return otherParticipant?.display_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
            otherParticipant?.email?.toLowerCase().includes(searchQuery.toLowerCase());

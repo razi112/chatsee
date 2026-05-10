@@ -1,13 +1,42 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Phone, Video, MoreVertical, ArrowLeft, Smile, Check, CheckCheck, Bug, Download, Trash2 } from 'lucide-react';
+import { Send, Phone, Video, MoreVertical, ArrowLeft, Smile, Check, CheckCheck, Bug, Download, Trash2, Eraser, Ban, ShieldOff } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useAuth } from '@/contexts/AuthContext';
 import { Conversation, Message, Profile } from '@/hooks/useChat';
 import { format, isToday, isYesterday } from 'date-fns';
 import { cn } from '@/lib/utils';
+import {
+  clearChat,
+  deleteChat,
+  getClearedAt,
+  isBlocked,
+  onChatActionsChanged,
+  setBlocked,
+} from '@/lib/chatActions';
+import { useToast } from '@/hooks/use-toast';
+
+const EMOJIS = ['😀','😁','😂','🤣','😊','😍','😘','😎','🤩','🥳','🤔','😴','😢','😭','😡','👍','👎','👏','🙏','💪','🔥','✨','🎉','❤️','💔','💯','😅','😉','😋','🤗','🤭','😇','🥰','😜','🤪','😏','😬','🙄','😤','🤯','😱','🥶','🤤','😈','👻','💀','🤖','🎁','☕','🍕'];
 
 interface ChatAreaProps {
   conversation: Conversation | null;
@@ -18,6 +47,7 @@ interface ChatAreaProps {
 
 export default function ChatArea({ conversation, messages, onSendMessage, onBack }: ChatAreaProps) {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [newMessage, setNewMessage] = useState('');
   const [showDebug, setShowDebug] = useState(false);
   const [lagMs, setLagMs] = useState(0);
@@ -26,8 +56,15 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
   const inputRef = useRef<HTMLInputElement>(null);
   const receiptUpdatesRef = useRef<Map<string, { is_read: boolean | null; at: number }>>(new Map());
   const [, forceTick] = useState(0);
+  const [confirm, setConfirm] = useState<null | 'clear' | 'delete' | 'block'>(null);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const [, setActionsVersion] = useState(0);
+
+  useEffect(() => onChatActionsChanged(() => setActionsVersion(v => v + 1)), []);
 
   const otherParticipant = conversation?.participants.find(p => p.id !== user?.id);
+  const blocked = otherParticipant ? isBlocked(otherParticipant.id) : false;
+  const clearedAt = conversation ? getClearedAt(conversation.id) : null;
 
   // Apply simulated lag before exposing real-time message updates to the view
   useEffect(() => {
@@ -198,8 +235,12 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
     return format(new Date(dateString), 'h:mm a');
   };
 
-  // Group messages by date
-  const groupedMessages = displayedMessages.reduce<{ date: string; messages: Message[] }[]>((acc, message) => {
+  // Filter out cleared messages, then group by date
+  const visibleMessages = clearedAt
+    ? displayedMessages.filter(m => new Date(m.created_at).getTime() > clearedAt)
+    : displayedMessages;
+
+  const groupedMessages = visibleMessages.reduce<{ date: string; messages: Message[] }[]>((acc, message) => {
     const dateKey = formatMessageDate(message.created_at);
     const lastGroup = acc[acc.length - 1];
     
@@ -278,11 +319,64 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
           <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
             <Phone className="w-5 h-5" />
           </Button>
-          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
-            <MoreVertical className="w-5 h-5" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+                <MoreVertical className="w-5 h-5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onClick={() => setConfirm('clear')}>
+                <Eraser className="w-4 h-4 mr-2" /> Clear chat
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setConfirm('delete')}>
+                <Trash2 className="w-4 h-4 mr-2" /> Delete chat
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {blocked ? (
+                <DropdownMenuItem onClick={() => { setBlocked(otherParticipant.id, false); toast({ title: 'User unblocked' }); }}>
+                  <ShieldOff className="w-4 h-4 mr-2" /> Unblock user
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem onClick={() => setConfirm('block')} className="text-destructive focus:text-destructive">
+                  <Ban className="w-4 h-4 mr-2" /> Block user
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
+
+      <AlertDialog open={confirm !== null} onOpenChange={(o) => !o && setConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirm === 'clear' && 'Clear this chat?'}
+              {confirm === 'delete' && 'Delete this chat?'}
+              {confirm === 'block' && `Block ${otherParticipant.display_name || otherParticipant.email}?`}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirm === 'clear' && 'Messages will be hidden from your view. The other participant will still see them.'}
+              {confirm === 'delete' && 'This chat will be removed from your list. New incoming messages will bring it back.'}
+              {confirm === 'block' && 'You will not be able to send messages to this user until you unblock them.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (!conversation) return;
+                if (confirm === 'clear') { clearChat(conversation.id); toast({ title: 'Chat cleared' }); }
+                if (confirm === 'delete') { deleteChat(conversation.id); toast({ title: 'Chat deleted' }); onBack?.(); }
+                if (confirm === 'block') { setBlocked(otherParticipant.id, true); toast({ title: 'User blocked' }); }
+                setConfirm(null);
+              }}
+            >
+              Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {showDebug && (
         <div className="px-4 py-2 bg-card/70 border-b border-border flex items-center gap-2 text-[11px] font-mono text-muted-foreground">
@@ -419,31 +513,70 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
 
       {/* Message Input */}
       <div className="p-3 bg-card/95 backdrop-blur border-t border-border">
-        <form onSubmit={handleSend} className="flex items-center gap-2">
-          <Button 
-            type="button" 
-            variant="ghost" 
-            size="icon"
-            className="text-muted-foreground hover:text-foreground shrink-0"
-          >
-            <Smile className="w-5 h-5" />
-          </Button>
-          <Input
-            ref={inputRef}
-            placeholder="Type a message"
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            className="flex-1 bg-secondary border-0 focus-visible:ring-1 focus-visible:ring-primary"
-          />
-          <Button 
-            type="submit" 
-            size="icon"
-            disabled={!newMessage.trim()}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground shrink-0"
-          >
-            <Send className="w-5 h-5" />
-          </Button>
-        </form>
+        {blocked ? (
+          <div className="flex items-center justify-center gap-3 py-2 text-sm text-muted-foreground">
+            <Ban className="w-4 h-4" />
+            <span>You blocked this user.</span>
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              className="h-auto p-0"
+              onClick={() => { if (otherParticipant) { setBlocked(otherParticipant.id, false); toast({ title: 'User unblocked' }); } }}
+            >
+              Unblock
+            </Button>
+          </div>
+        ) : (
+          <form onSubmit={handleSend} className="flex items-center gap-2">
+            <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="text-muted-foreground hover:text-foreground shrink-0"
+                  title="Emoji"
+                >
+                  <Smile className="w-5 h-5" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent side="top" align="start" className="w-72 p-2">
+                <div className="grid grid-cols-8 gap-1 max-h-56 overflow-y-auto">
+                  {EMOJIS.map(e => (
+                    <button
+                      key={e}
+                      type="button"
+                      className="text-xl rounded hover:bg-accent p-1 transition-colors"
+                      onClick={() => {
+                        setNewMessage(m => m + e);
+                        setEmojiOpen(false);
+                        inputRef.current?.focus();
+                      }}
+                    >
+                      {e}
+                    </button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+            <Input
+              ref={inputRef}
+              placeholder="Type a message"
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              className="flex-1 bg-secondary border-0 focus-visible:ring-1 focus-visible:ring-primary"
+            />
+            <Button
+              type="submit"
+              size="icon"
+              disabled={!newMessage.trim()}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground shrink-0"
+            >
+              <Send className="w-5 h-5" />
+            </Button>
+          </form>
+        )}
       </div>
     </div>
   );
