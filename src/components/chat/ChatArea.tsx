@@ -47,6 +47,7 @@ interface ChatAreaProps {
 
 export default function ChatArea({ conversation, messages, onSendMessage, onBack }: ChatAreaProps) {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [newMessage, setNewMessage] = useState('');
   const [showDebug, setShowDebug] = useState(false);
   const [lagMs, setLagMs] = useState(0);
@@ -55,8 +56,15 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
   const inputRef = useRef<HTMLInputElement>(null);
   const receiptUpdatesRef = useRef<Map<string, { is_read: boolean | null; at: number }>>(new Map());
   const [, forceTick] = useState(0);
+  const [confirm, setConfirm] = useState<null | 'clear' | 'delete' | 'block'>(null);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const [actionsVersion, setActionsVersion] = useState(0);
+
+  useEffect(() => onChatActionsChanged(() => setActionsVersion(v => v + 1)), []);
 
   const otherParticipant = conversation?.participants.find(p => p.id !== user?.id);
+  const blocked = otherParticipant ? isBlocked(otherParticipant.id) : false;
+  const clearedAt = conversation ? getClearedAt(conversation.id) : null;
 
   // Apply simulated lag before exposing real-time message updates to the view
   useEffect(() => {
