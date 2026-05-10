@@ -303,6 +303,43 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
         </div>
       )}
 
+      {showDebug && (
+        <div className="px-4 py-2 bg-card/70 border-b border-border flex flex-wrap items-center gap-2 text-[11px] font-mono text-muted-foreground">
+          <span>Tick log: <span className="text-foreground">{log.length}</span> entries</span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-6 px-2 text-[11px]"
+            onClick={exportLogJson}
+            disabled={log.length === 0}
+          >
+            <Download className="w-3 h-3 mr-1" /> JSON
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-6 px-2 text-[11px]"
+            onClick={exportLogCsv}
+            disabled={log.length === 0}
+          >
+            <Download className="w-3 h-3 mr-1" /> CSV
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-6 px-2 text-[11px]"
+            onClick={clearLog}
+            disabled={log.length === 0}
+          >
+            <Trash2 className="w-3 h-3 mr-1" /> Clear
+          </Button>
+          <span className="ml-auto">records created + every tick transition with current lag</span>
+        </div>
+      )}
+
       {/* Messages */}
       <ScrollArea ref={scrollRef} className="flex-1 p-4 scrollbar-thin">
         <div className="space-y-4">
