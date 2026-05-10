@@ -1,13 +1,42 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Phone, Video, MoreVertical, ArrowLeft, Smile, Check, CheckCheck, Bug, Download, Trash2 } from 'lucide-react';
+import { Send, Phone, Video, MoreVertical, ArrowLeft, Smile, Check, CheckCheck, Bug, Download, Trash2, Eraser, Ban, ShieldOff } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useAuth } from '@/contexts/AuthContext';
 import { Conversation, Message, Profile } from '@/hooks/useChat';
 import { format, isToday, isYesterday } from 'date-fns';
 import { cn } from '@/lib/utils';
+import {
+  clearChat,
+  deleteChat,
+  getClearedAt,
+  isBlocked,
+  onChatActionsChanged,
+  setBlocked,
+} from '@/lib/chatActions';
+import { useToast } from '@/hooks/use-toast';
+
+const EMOJIS = ['😀','😁','😂','🤣','😊','😍','😘','😎','🤩','🥳','🤔','😴','😢','😭','😡','👍','👎','👏','🙏','💪','🔥','✨','🎉','❤️','💔','💯','😅','😉','😋','🤗','🤭','😇','🥰','😜','🤪','😏','😬','🙄','😤','🤯','😱','🥶','🤤','😈','👻','💀','🤖','🎁','☕','🍕'];
 
 interface ChatAreaProps {
   conversation: Conversation | null;
