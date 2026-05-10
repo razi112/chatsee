@@ -172,6 +172,25 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
         </div>
       </div>
 
+      {showDebug && (
+        <div className="px-4 py-2 bg-card/70 border-b border-border flex items-center gap-2 text-[11px] font-mono text-muted-foreground">
+          <span>Simulated real-time lag:</span>
+          {[0, 500, 1500, 3000, 6000].map(ms => (
+            <Button
+              key={ms}
+              type="button"
+              variant={lagMs === ms ? 'default' : 'outline'}
+              size="sm"
+              className="h-6 px-2 text-[11px]"
+              onClick={() => setLagMs(ms)}
+            >
+              {ms === 0 ? 'off' : `${ms}ms`}
+            </Button>
+          ))}
+          <span className="ml-auto">applied to incoming message + receipt updates</span>
+        </div>
+      )}
+
       {/* Messages */}
       <ScrollArea ref={scrollRef} className="flex-1 p-4 scrollbar-thin">
         <div className="space-y-4">
