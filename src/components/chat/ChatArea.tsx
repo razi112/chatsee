@@ -235,8 +235,12 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
     return format(new Date(dateString), 'h:mm a');
   };
 
-  // Group messages by date
-  const groupedMessages = displayedMessages.reduce<{ date: string; messages: Message[] }[]>((acc, message) => {
+  // Filter out cleared messages, then group by date
+  const visibleMessages = clearedAt
+    ? displayedMessages.filter(m => new Date(m.created_at).getTime() > clearedAt)
+    : displayedMessages;
+
+  const groupedMessages = visibleMessages.reduce<{ date: string; messages: Message[] }[]>((acc, message) => {
     const dateKey = formatMessageDate(message.created_at);
     const lastGroup = acc[acc.length - 1];
     
