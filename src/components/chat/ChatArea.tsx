@@ -513,31 +513,70 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
 
       {/* Message Input */}
       <div className="p-3 bg-card/95 backdrop-blur border-t border-border">
-        <form onSubmit={handleSend} className="flex items-center gap-2">
-          <Button 
-            type="button" 
-            variant="ghost" 
-            size="icon"
-            className="text-muted-foreground hover:text-foreground shrink-0"
-          >
-            <Smile className="w-5 h-5" />
-          </Button>
-          <Input
-            ref={inputRef}
-            placeholder="Type a message"
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            className="flex-1 bg-secondary border-0 focus-visible:ring-1 focus-visible:ring-primary"
-          />
-          <Button 
-            type="submit" 
-            size="icon"
-            disabled={!newMessage.trim()}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground shrink-0"
-          >
-            <Send className="w-5 h-5" />
-          </Button>
-        </form>
+        {blocked ? (
+          <div className="flex items-center justify-center gap-3 py-2 text-sm text-muted-foreground">
+            <Ban className="w-4 h-4" />
+            <span>You blocked this user.</span>
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              className="h-auto p-0"
+              onClick={() => { if (otherParticipant) { setBlocked(otherParticipant.id, false); toast({ title: 'User unblocked' }); } }}
+            >
+              Unblock
+            </Button>
+          </div>
+        ) : (
+          <form onSubmit={handleSend} className="flex items-center gap-2">
+            <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="text-muted-foreground hover:text-foreground shrink-0"
+                  title="Emoji"
+                >
+                  <Smile className="w-5 h-5" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent side="top" align="start" className="w-72 p-2">
+                <div className="grid grid-cols-8 gap-1 max-h-56 overflow-y-auto">
+                  {EMOJIS.map(e => (
+                    <button
+                      key={e}
+                      type="button"
+                      className="text-xl rounded hover:bg-accent p-1 transition-colors"
+                      onClick={() => {
+                        setNewMessage(m => m + e);
+                        setEmojiOpen(false);
+                        inputRef.current?.focus();
+                      }}
+                    >
+                      {e}
+                    </button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+            <Input
+              ref={inputRef}
+              placeholder="Type a message"
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              className="flex-1 bg-secondary border-0 focus-visible:ring-1 focus-visible:ring-primary"
+            />
+            <Button
+              type="submit"
+              size="icon"
+              disabled={!newMessage.trim()}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground shrink-0"
+            >
+              <Send className="w-5 h-5" />
+            </Button>
+          </form>
+        )}
       </div>
     </div>
   );
