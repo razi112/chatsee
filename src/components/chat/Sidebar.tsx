@@ -37,7 +37,15 @@ export default function Sidebar({
   const myInitials = ((user?.user_metadata?.display_name as string) || user?.email || 'U')
     .split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
+  const [actionsVersion, setActionsVersion] = useState(0);
+  useEffect(() => onChatActionsChanged(() => setActionsVersion(v => v + 1)), []);
+
   const filteredConversations = conversations.filter(conv => {
+    if (isDeleted(conv.id) && !conv.lastMessage) return false;
+    if (isDeleted(conv.id)) {
+      // Hide deleted unless a new message arrived after deletion timestamp — simple: hide always until user starts again
+      return false;
+    }
     const otherParticipant = conv.participants.find(p => p.id !== user?.id);
     return otherParticipant?.display_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
            otherParticipant?.email?.toLowerCase().includes(searchQuery.toLowerCase());
