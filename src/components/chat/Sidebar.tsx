@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Search, Plus, LogOut, Settings, MessageCircle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import NewChatDialog from './NewChatDialog';
 import ProfileSettingsDialog from './ProfileSettingsDialog';
+import { isDeleted, onChatActionsChanged } from '@/lib/chatActions';
 
 interface SidebarProps {
   conversations: Conversation[];
