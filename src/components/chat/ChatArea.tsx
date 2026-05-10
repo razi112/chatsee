@@ -54,11 +54,10 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
   }, [displayedMessages]);
 
   useEffect(() => {
-    // Scroll to bottom when messages change
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [displayedMessages]);
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
