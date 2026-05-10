@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Phone, Video, MoreVertical, ArrowLeft, Smile, Check, CheckCheck, Bug } from 'lucide-react';
+import { Send, Phone, Video, MoreVertical, ArrowLeft, Smile, Check, CheckCheck, Bug, Download, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -39,19 +39,131 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
     return () => clearTimeout(t);
   }, [messages, lagMs]);
 
-  // Track receipt (is_read) update timestamps per message id (based on what's displayed)
+  // Tick-state log for export
+  type TickState = 'sent' | 'delivered' | 'read' | 'incoming';
+  interface LogEntry {
+    ts: number;
+    iso: string;
+    event: 'created' | 'state_change';
+    message_id: string;
+    sender_id: string;
+    is_mine: boolean;
+    is_read: boolean;
+    delivered: boolean;
+    tick: TickState;
+    prev_tick: TickState | null;
+    lag_ms: number;
+    created_at: string;
+  }
+  const prevStateRef = useRef<Map<string, { is_read: boolean; delivered: boolean; tick: TickState }>>(new Map());
+  const [log, setLog] = useState<LogEntry[]>([]);
+
+  const computeTick = (msg: Message, isMine: boolean, delivered: boolean): TickState => {
+    if (!isMine) return 'incoming';
+    if (msg.is_read) return 'read';
+    if (delivered) return 'delivered';
+    return 'sent';
+  };
+
+  // Track receipt (is_read) update timestamps + log every state change
   useEffect(() => {
     const map = receiptUpdatesRef.current;
+    const prev = prevStateRef.current;
+    const otherOnline = !!otherParticipant?.is_online;
+    const newEntries: LogEntry[] = [];
     let changed = false;
+
     displayedMessages.forEach(m => {
-      const prev = map.get(m.id);
-      if (!prev || prev.is_read !== m.is_read) {
+      const isMine = m.sender_id === user?.id;
+      const delivered = isMine && otherOnline;
+      const isRead = !!m.is_read;
+      const tick = computeTick(m, isMine, delivered);
+
+      const prevReceipt = map.get(m.id);
+      if (!prevReceipt || prevReceipt.is_read !== m.is_read) {
         map.set(m.id, { is_read: m.is_read, at: Date.now() });
         changed = true;
       }
+
+      const prevState = prev.get(m.id);
+      const ts = Date.now();
+      if (!prevState) {
+        prev.set(m.id, { is_read: isRead, delivered, tick });
+        newEntries.push({
+          ts,
+          iso: new Date(ts).toISOString(),
+          event: 'created',
+          message_id: m.id,
+          sender_id: m.sender_id,
+          is_mine: isMine,
+          is_read: isRead,
+          delivered,
+          tick,
+          prev_tick: null,
+          lag_ms: lagMs,
+          created_at: m.created_at,
+        });
+      } else if (prevState.is_read !== isRead || prevState.delivered !== delivered || prevState.tick !== tick) {
+        newEntries.push({
+          ts,
+          iso: new Date(ts).toISOString(),
+          event: 'state_change',
+          message_id: m.id,
+          sender_id: m.sender_id,
+          is_mine: isMine,
+          is_read: isRead,
+          delivered,
+          tick,
+          prev_tick: prevState.tick,
+          lag_ms: lagMs,
+          created_at: m.created_at,
+        });
+        prev.set(m.id, { is_read: isRead, delivered, tick });
+      }
     });
+
+    if (newEntries.length) setLog(l => [...l, ...newEntries]);
     if (changed) forceTick(t => t + 1);
-  }, [displayedMessages]);
+  }, [displayedMessages, otherParticipant?.is_online, user?.id, lagMs]);
+
+  const downloadFile = (filename: string, content: string, mime: string) => {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const exportLogJson = () => {
+    const payload = {
+      exported_at: new Date().toISOString(),
+      conversation_id: conversation?.id ?? null,
+      viewer_id: user?.id ?? null,
+      other_participant_id: otherParticipant?.id ?? null,
+      current_lag_ms: lagMs,
+      entries: log,
+    };
+    downloadFile(`tick-log-${Date.now()}.json`, JSON.stringify(payload, null, 2), 'application/json');
+  };
+
+  const exportLogCsv = () => {
+    const headers = ['ts','iso','event','message_id','sender_id','is_mine','is_read','delivered','tick','prev_tick','lag_ms','created_at'];
+    const escape = (v: unknown) => {
+      const s = v === null || v === undefined ? '' : String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const rows = log.map(e => headers.map(h => escape((e as unknown as Record<string, unknown>)[h])).join(','));
+    downloadFile(`tick-log-${Date.now()}.csv`, [headers.join(','), ...rows].join('\n'), 'text/csv');
+  };
+
+  const clearLog = () => {
+    setLog([]);
+    prevStateRef.current.clear();
+  };
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -188,6 +300,43 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
             </Button>
           ))}
           <span className="ml-auto">applied to incoming message + receipt updates</span>
+        </div>
+      )}
+
+      {showDebug && (
+        <div className="px-4 py-2 bg-card/70 border-b border-border flex flex-wrap items-center gap-2 text-[11px] font-mono text-muted-foreground">
+          <span>Tick log: <span className="text-foreground">{log.length}</span> entries</span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-6 px-2 text-[11px]"
+            onClick={exportLogJson}
+            disabled={log.length === 0}
+          >
+            <Download className="w-3 h-3 mr-1" /> JSON
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-6 px-2 text-[11px]"
+            onClick={exportLogCsv}
+            disabled={log.length === 0}
+          >
+            <Download className="w-3 h-3 mr-1" /> CSV
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-6 px-2 text-[11px]"
+            onClick={clearLog}
+            disabled={log.length === 0}
+          >
+            <Trash2 className="w-3 h-3 mr-1" /> Clear
+          </Button>
+          <span className="ml-auto">records created + every tick transition with current lag</span>
         </div>
       )}
 
