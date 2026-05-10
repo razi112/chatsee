@@ -20,6 +20,8 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
   const { user } = useAuth();
   const [newMessage, setNewMessage] = useState('');
   const [showDebug, setShowDebug] = useState(false);
+  const [lagMs, setLagMs] = useState(0);
+  const [displayedMessages, setDisplayedMessages] = useState<Message[]>(messages);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const receiptUpdatesRef = useRef<Map<string, { is_read: boolean | null; at: number }>>(new Map());
@@ -27,11 +29,21 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
 
   const otherParticipant = conversation?.participants.find(p => p.id !== user?.id);
 
-  // Track receipt (is_read) update timestamps per message id
+  // Apply simulated lag before exposing real-time message updates to the view
+  useEffect(() => {
+    if (lagMs <= 0) {
+      setDisplayedMessages(messages);
+      return;
+    }
+    const t = setTimeout(() => setDisplayedMessages(messages), lagMs);
+    return () => clearTimeout(t);
+  }, [messages, lagMs]);
+
+  // Track receipt (is_read) update timestamps per message id (based on what's displayed)
   useEffect(() => {
     const map = receiptUpdatesRef.current;
     let changed = false;
-    messages.forEach(m => {
+    displayedMessages.forEach(m => {
       const prev = map.get(m.id);
       if (!prev || prev.is_read !== m.is_read) {
         map.set(m.id, { is_read: m.is_read, at: Date.now() });
@@ -39,14 +51,13 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
       }
     });
     if (changed) forceTick(t => t + 1);
-  }, [messages]);
+  }, [displayedMessages]);
 
   useEffect(() => {
-    // Scroll to bottom when messages change
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [displayedMessages]);
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,7 +87,7 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
   };
 
   // Group messages by date
-  const groupedMessages = messages.reduce<{ date: string; messages: Message[] }[]>((acc, message) => {
+  const groupedMessages = displayedMessages.reduce<{ date: string; messages: Message[] }[]>((acc, message) => {
     const dateKey = formatMessageDate(message.created_at);
     const lastGroup = acc[acc.length - 1];
     
@@ -160,6 +171,25 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
           </Button>
         </div>
       </div>
+
+      {showDebug && (
+        <div className="px-4 py-2 bg-card/70 border-b border-border flex items-center gap-2 text-[11px] font-mono text-muted-foreground">
+          <span>Simulated real-time lag:</span>
+          {[0, 500, 1500, 3000, 6000].map(ms => (
+            <Button
+              key={ms}
+              type="button"
+              variant={lagMs === ms ? 'default' : 'outline'}
+              size="sm"
+              className="h-6 px-2 text-[11px]"
+              onClick={() => setLagMs(ms)}
+            >
+              {ms === 0 ? 'off' : `${ms}ms`}
+            </Button>
+          ))}
+          <span className="ml-auto">applied to incoming message + receipt updates</span>
+        </div>
+      )}
 
       {/* Messages */}
       <ScrollArea ref={scrollRef} className="flex-1 p-4 scrollbar-thin">
