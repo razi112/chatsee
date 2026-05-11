@@ -33,6 +33,7 @@ import {
   isBlocked,
   onChatActionsChanged,
   setBlocked,
+  unclearChat,
 } from '@/lib/chatActions';
 import { useToast } from '@/hooks/use-toast';
 
@@ -329,6 +330,11 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
               <DropdownMenuItem onClick={() => setConfirm('clear')}>
                 <Eraser className="w-4 h-4 mr-2" /> Clear chat
               </DropdownMenuItem>
+              {clearedAt && (
+                <DropdownMenuItem onClick={() => { if (conversation) { unclearChat(conversation.id); toast({ title: 'Chat restored' }); } }}>
+                  <Eraser className="w-4 h-4 mr-2" /> Undo clear
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onClick={() => setConfirm('delete')}>
                 <Trash2 className="w-4 h-4 mr-2" /> Delete chat
               </DropdownMenuItem>
@@ -346,6 +352,26 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
           </DropdownMenu>
         </div>
       </div>
+
+      {clearedAt && (
+        <div className="px-4 py-2 bg-muted/60 border-b border-border flex items-center justify-between gap-3 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <Eraser className="w-3.5 h-3.5" />
+            <span>
+              Chat cleared on {format(new Date(clearedAt), 'MMM d, h:mm a')}. Older messages are hidden from your view.
+            </span>
+          </div>
+          <Button
+            type="button"
+            variant="link"
+            size="sm"
+            className="h-auto p-0 text-xs"
+            onClick={() => { if (conversation) { unclearChat(conversation.id); toast({ title: 'Chat restored' }); } }}
+          >
+            Undo
+          </Button>
+        </div>
+      )}
 
       <AlertDialog open={confirm !== null} onOpenChange={(o) => !o && setConfirm(null)}>
         <AlertDialogContent>
