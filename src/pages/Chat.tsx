@@ -33,6 +33,13 @@ export default function Chat() {
     }
   }, [user, authLoading, navigate]);
 
+  useEffect(() => {
+    if (user) {
+      startChatStateSync(user.id);
+      return () => { stopChatStateSync(); };
+    }
+  }, [user]);
+
   const handleSelectConversation = (conversation: typeof currentConversation) => {
     if (conversation) {
       selectConversation(conversation);
