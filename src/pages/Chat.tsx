@@ -7,6 +7,7 @@ import Sidebar from '@/components/chat/Sidebar';
 import ChatArea from '@/components/chat/ChatArea';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Loader2 } from 'lucide-react';
+import { startChatStateSync, stopChatStateSync } from '@/lib/chatActions';
 
 export default function Chat() {
   const { user, loading: authLoading } = useAuth();
