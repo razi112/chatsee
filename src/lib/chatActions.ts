@@ -64,25 +64,13 @@ export async function clearChat(convId: string, userId: string) {
   const ts = Date.now();
   clearedCache.set(convId, ts);
   emit();
-  const { error } = await supabase
-    .from('user_chat_state')
-    .upsert(
-      { user_id: userId, conversation_id: convId, cleared_at: new Date(ts).toISOString() },
-      { onConflict: 'user_id,conversation_id' }
-    );
-  if (error) console.error('clearChat persist failed', error);
+  await persistClearedAt(userId, convId, new Date(ts).toISOString(), 'clear');
 }
 
 export async function unclearChat(convId: string, userId: string) {
   clearedCache.set(convId, null);
   emit();
-  const { error } = await supabase
-    .from('user_chat_state')
-    .upsert(
-      { user_id: userId, conversation_id: convId, cleared_at: null },
-      { onConflict: 'user_id,conversation_id' }
-    );
-  if (error) console.error('unclearChat persist failed', error);
+  await persistClearedAt(userId, convId, null, 'undo clear');
 }
 
 // Initial fetch + realtime sync for all of the user's chat-state rows.
