@@ -330,6 +330,11 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
               <DropdownMenuItem onClick={() => setConfirm('clear')}>
                 <Eraser className="w-4 h-4 mr-2" /> Clear chat
               </DropdownMenuItem>
+              {clearedAt && (
+                <DropdownMenuItem onClick={() => { if (conversation) { unclearChat(conversation.id); toast({ title: 'Chat restored' }); } }}>
+                  <Eraser className="w-4 h-4 mr-2" /> Undo clear
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onClick={() => setConfirm('delete')}>
                 <Trash2 className="w-4 h-4 mr-2" /> Delete chat
               </DropdownMenuItem>
