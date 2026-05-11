@@ -392,7 +392,7 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
             <AlertDialogAction
               onClick={() => {
                 if (!conversation) return;
-                if (confirm === 'clear') { clearChat(conversation.id); toast({ title: 'Chat cleared' }); }
+                if (confirm === 'clear' && user) { clearChat(conversation.id, user.id); toast({ title: 'Chat cleared' }); }
                 if (confirm === 'delete') { deleteChat(conversation.id); toast({ title: 'Chat deleted' }); onBack?.(); }
                 if (confirm === 'block') { setBlocked(otherParticipant.id, true); toast({ title: 'User blocked' }); }
                 setConfirm(null);
