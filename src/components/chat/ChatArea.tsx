@@ -331,7 +331,7 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
                 <Eraser className="w-4 h-4 mr-2" /> Clear chat
               </DropdownMenuItem>
               {clearedAt && (
-                <DropdownMenuItem onClick={() => { if (conversation) { unclearChat(conversation.id); toast({ title: 'Chat restored' }); } }}>
+                <DropdownMenuItem onClick={() => { if (conversation && user) { unclearChat(conversation.id, user.id); toast({ title: 'Chat restored' }); } }}>
                   <Eraser className="w-4 h-4 mr-2" /> Undo clear
                 </DropdownMenuItem>
               )}
@@ -366,7 +366,7 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
             variant="link"
             size="sm"
             className="h-auto p-0 text-xs"
-            onClick={() => { if (conversation) { unclearChat(conversation.id); toast({ title: 'Chat restored' }); } }}
+            onClick={() => { if (conversation && user) { unclearChat(conversation.id, user.id); toast({ title: 'Chat restored' }); } }}
           >
             Undo
           </Button>
@@ -392,7 +392,7 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
             <AlertDialogAction
               onClick={() => {
                 if (!conversation) return;
-                if (confirm === 'clear') { clearChat(conversation.id); toast({ title: 'Chat cleared' }); }
+                if (confirm === 'clear' && user) { clearChat(conversation.id, user.id); toast({ title: 'Chat cleared' }); }
                 if (confirm === 'delete') { deleteChat(conversation.id); toast({ title: 'Chat deleted' }); onBack?.(); }
                 if (confirm === 'block') { setBlocked(otherParticipant.id, true); toast({ title: 'User blocked' }); }
                 setConfirm(null);
