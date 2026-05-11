@@ -1,22 +1,105 @@
-// Frontend-only helpers for clear chat / delete chat / block user.
-// State persists in localStorage and broadcasts a `chat-actions-changed` event.
+// Per-user chat clear/undo state is persisted on the backend so it stays
+// consistent across devices. Delete/block remain local-only (per-device).
 
-const CLEAR_KEY = (convId: string) => `chat-cleared:${convId}`;
+import { supabase } from '@/integrations/supabase/client';
+
 const DELETE_KEY = (convId: string) => `chat-deleted:${convId}`;
 const BLOCK_KEY = (userId: string) => `chat-blocked:${userId}`;
 
+// In-memory cache of cleared_at (ms epoch) per conversation for the signed-in user.
+const clearedCache = new Map<string, number | null>();
+let cacheUserId: string | null = null;
+let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
+
+function emit() {
+  window.dispatchEvent(new Event('chat-actions-changed'));
+}
+
 export function getClearedAt(convId: string): number | null {
-  const v = localStorage.getItem(CLEAR_KEY(convId));
-  return v ? Number(v) : null;
+  return clearedCache.get(convId) ?? null;
 }
-export function clearChat(convId: string) {
-  localStorage.setItem(CLEAR_KEY(convId), String(Date.now()));
+
+export async function clearChat(convId: string, userId: string) {
+  const ts = Date.now();
+  clearedCache.set(convId, ts);
   emit();
+  const { error } = await supabase
+    .from('user_chat_state')
+    .upsert(
+      { user_id: userId, conversation_id: convId, cleared_at: new Date(ts).toISOString() },
+      { onConflict: 'user_id,conversation_id' }
+    );
+  if (error) console.error('clearChat persist failed', error);
 }
-export function unclearChat(convId: string) {
-  localStorage.removeItem(CLEAR_KEY(convId));
+
+export async function unclearChat(convId: string, userId: string) {
+  clearedCache.set(convId, null);
   emit();
+  const { error } = await supabase
+    .from('user_chat_state')
+    .upsert(
+      { user_id: userId, conversation_id: convId, cleared_at: null },
+      { onConflict: 'user_id,conversation_id' }
+    );
+  if (error) console.error('unclearChat persist failed', error);
 }
+
+// Initial fetch + realtime sync for all of the user's chat-state rows.
+export async function startChatStateSync(userId: string) {
+  if (cacheUserId === userId && realtimeChannel) return;
+  await stopChatStateSync();
+  cacheUserId = userId;
+
+  const { data, error } = await supabase
+    .from('user_chat_state')
+    .select('conversation_id, cleared_at')
+    .eq('user_id', userId);
+  if (error) {
+    console.error('chat state initial load failed', error);
+  } else {
+    clearedCache.clear();
+    for (const row of data ?? []) {
+      clearedCache.set(
+        row.conversation_id as string,
+        row.cleared_at ? new Date(row.cleared_at as string).getTime() : null
+      );
+    }
+    emit();
+  }
+
+  realtimeChannel = supabase
+    .channel(`user-chat-state-${userId}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'user_chat_state', filter: `user_id=eq.${userId}` },
+      (payload) => {
+        const row = (payload.new ?? payload.old) as { conversation_id: string; cleared_at: string | null } | null;
+        if (!row) return;
+        if (payload.eventType === 'DELETE') {
+          clearedCache.delete(row.conversation_id);
+        } else {
+          clearedCache.set(
+            row.conversation_id,
+            row.cleared_at ? new Date(row.cleared_at).getTime() : null
+          );
+        }
+        emit();
+      }
+    )
+    .subscribe();
+}
+
+export async function stopChatStateSync() {
+  if (realtimeChannel) {
+    await supabase.removeChannel(realtimeChannel);
+    realtimeChannel = null;
+  }
+  cacheUserId = null;
+  clearedCache.clear();
+}
+
+// --- Local-only state below ---
+
 export function isDeleted(convId: string): boolean {
   return localStorage.getItem(DELETE_KEY(convId)) === '1';
 }
@@ -35,10 +118,6 @@ export function setBlocked(userId: string, blocked: boolean) {
   if (blocked) localStorage.setItem(BLOCK_KEY(userId), '1');
   else localStorage.removeItem(BLOCK_KEY(userId));
   emit();
-}
-
-function emit() {
-  window.dispatchEvent(new Event('chat-actions-changed'));
 }
 
 export function onChatActionsChanged(cb: () => void) {
