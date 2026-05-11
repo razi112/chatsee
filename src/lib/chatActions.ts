@@ -13,6 +13,10 @@ export function clearChat(convId: string) {
   localStorage.setItem(CLEAR_KEY(convId), String(Date.now()));
   emit();
 }
+export function unclearChat(convId: string) {
+  localStorage.removeItem(CLEAR_KEY(convId));
+  emit();
+}
 export function isDeleted(convId: string): boolean {
   return localStorage.getItem(DELETE_KEY(convId)) === '1';
 }
