@@ -366,7 +366,7 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
             variant="link"
             size="sm"
             className="h-auto p-0 text-xs"
-            onClick={() => { if (conversation) { unclearChat(conversation.id); toast({ title: 'Chat restored' }); } }}
+            onClick={() => { if (conversation && user) { unclearChat(conversation.id, user.id); toast({ title: 'Chat restored' }); } }}
           >
             Undo
           </Button>
