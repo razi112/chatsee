@@ -33,6 +33,7 @@ import {
   isBlocked,
   onChatActionsChanged,
   setBlocked,
+  unclearChat,
 } from '@/lib/chatActions';
 import { useToast } from '@/hooks/use-toast';
 
