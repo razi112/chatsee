@@ -2,6 +2,47 @@
 // consistent across devices. Delete/block remain local-only (per-device).
 
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+
+const MAX_RETRIES = 3;
+const BASE_DELAY_MS = 500;
+
+async function persistClearedAt(
+  userId: string,
+  convId: string,
+  clearedAtIso: string | null,
+  label: 'clear' | 'undo clear'
+): Promise<boolean> {
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    const { error } = await supabase
+      .from('user_chat_state')
+      .upsert(
+        { user_id: userId, conversation_id: convId, cleared_at: clearedAtIso },
+        { onConflict: 'user_id,conversation_id' }
+      );
+    if (!error) {
+      if (attempt > 1) toast.success(`Chat ${label} synced`);
+      return true;
+    }
+    lastError = error;
+    console.warn(`${label} persist attempt ${attempt} failed`, error);
+    if (attempt < MAX_RETRIES) {
+      await new Promise((r) => setTimeout(r, BASE_DELAY_MS * 2 ** (attempt - 1)));
+    }
+  }
+  console.error(`${label} persist failed after ${MAX_RETRIES} attempts`, lastError);
+  toast.error(`Couldn't sync ${label} across devices`, {
+    description: 'Saved locally. Tap retry to try again.',
+    action: {
+      label: 'Retry',
+      onClick: () => {
+        void persistClearedAt(userId, convId, clearedAtIso, label);
+      },
+    },
+  });
+  return false;
+}
 
 const DELETE_KEY = (convId: string) => `chat-deleted:${convId}`;
 const BLOCK_KEY = (userId: string) => `chat-blocked:${userId}`;
