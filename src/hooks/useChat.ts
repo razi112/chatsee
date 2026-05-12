@@ -27,6 +27,10 @@ export interface Conversation {
   id: string;
   created_at: string;
   updated_at: string;
+  is_group?: boolean;
+  name?: string | null;
+  avatar_url?: string | null;
+  created_by?: string | null;
   participants: Profile[];
   lastMessage?: Message;
 }
