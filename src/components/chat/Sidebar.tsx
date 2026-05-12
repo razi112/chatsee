@@ -25,6 +25,7 @@ interface SidebarProps {
   profiles: Profile[];
   onSelectConversation: (conversation: Conversation) => void;
   onStartConversation: (userId: string) => void;
+  onCreateGroup?: (name: string, memberIds: string[]) => Promise<void> | void;
 }
 
 export default function Sidebar({
@@ -33,11 +34,13 @@ export default function Sidebar({
   profiles,
   onSelectConversation,
   onStartConversation,
+  onCreateGroup,
 }: SidebarProps) {
   const { user, signOut } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewChat, setShowNewChat] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
   const myProfile = profiles.find(p => p.id === user?.id);
   // Note: profiles list excludes current user, so fall back to user metadata
   const myAvatarUrl = myProfile?.avatar_url || (user?.user_metadata?.avatar_url as string | undefined);
@@ -49,14 +52,16 @@ export default function Sidebar({
 
   const filteredConversations = conversations.filter(conv => {
     if (isDeleted(conv.id) && !conv.lastMessage) return false;
-    if (isDeleted(conv.id)) {
-      // Hide deleted unless a new message arrived after deletion timestamp — simple: hide always until user starts again
-      return false;
+    if (isDeleted(conv.id)) return false;
+    const q = searchQuery.toLowerCase();
+    if (conv.is_group) {
+      return (conv.name || '').toLowerCase().includes(q);
     }
     const otherParticipant = conv.participants.find(p => p.id !== user?.id);
-    return otherParticipant?.display_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-           otherParticipant?.email?.toLowerCase().includes(searchQuery.toLowerCase());
+    return otherParticipant?.display_name?.toLowerCase().includes(q) ||
+           otherParticipant?.email?.toLowerCase().includes(q);
   });
+
 
   const getOtherParticipant = (conversation: Conversation) => {
     return conversation.participants.find(p => p.id !== user?.id);
