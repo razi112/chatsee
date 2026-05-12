@@ -27,6 +27,10 @@ export interface Conversation {
   id: string;
   created_at: string;
   updated_at: string;
+  is_group?: boolean;
+  name?: string | null;
+  avatar_url?: string | null;
+  created_by?: string | null;
   participants: Profile[];
   lastMessage?: Message;
 }
@@ -407,6 +411,22 @@ export function useChat() {
     fetchMessages(conversation.id);
   }, [fetchMessages]);
 
+  // Create group conversation
+  const createGroup = useCallback(async (name: string, memberIds: string[], avatarUrl?: string) => {
+    if (!user) return null;
+    const { data: convId, error } = await supabase.rpc('create_group_conversation', {
+      _name: name,
+      _member_ids: memberIds,
+      _avatar_url: avatarUrl ?? null,
+    });
+    if (error || !convId) {
+      toast({ title: 'Error', description: 'Failed to create group', variant: 'destructive' });
+      return null;
+    }
+    await fetchConversations();
+    return convId as string;
+  }, [user, toast, fetchConversations]);
+
   return {
     conversations,
     currentConversation,
@@ -417,5 +437,6 @@ export function useChat() {
     startConversation,
     sendMessage,
     fetchConversations,
+    createGroup,
   };
 }

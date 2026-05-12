@@ -282,19 +282,25 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
           </Button>
         )}
         <Avatar className="w-10 h-10">
-          <AvatarImage src={otherParticipant.avatar_url || undefined} />
+          <AvatarImage src={(conversation.is_group ? conversation.avatar_url : otherParticipant?.avatar_url) || undefined} />
           <AvatarFallback className="bg-primary/20 text-primary font-medium">
-            {getInitials(otherParticipant)}
+            {conversation.is_group
+              ? (conversation.name || 'G').slice(0, 2).toUpperCase()
+              : otherParticipant ? getInitials(otherParticipant) : '?'}
           </AvatarFallback>
         </Avatar>
         <div className="flex-1">
           <h3 className="font-medium text-foreground">
-            {otherParticipant.display_name || otherParticipant.email.split('@')[0]}
+            {conversation.is_group
+              ? (conversation.name || 'Group')
+              : otherParticipant?.display_name || otherParticipant?.email.split('@')[0]}
           </h3>
           <p className="text-xs text-muted-foreground">
-            {otherParticipant.is_online ? (
+            {conversation.is_group ? (
+              `${conversation.participants.length} members`
+            ) : otherParticipant?.is_online ? (
               <span className="text-online">Online</span>
-            ) : otherParticipant.last_seen ? (
+            ) : otherParticipant?.last_seen ? (
               `Last seen ${format(new Date(otherParticipant.last_seen), 'MMM d, h:mm a')}`
             ) : (
               'Offline'
