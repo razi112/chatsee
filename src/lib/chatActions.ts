@@ -77,29 +77,30 @@ export async function unclearChat(convId: string, userId: string) {
 // Initial fetch + realtime sync for all of the user's chat-state rows.
 export async function startChatStateSync(userId: string) {
   if (cacheUserId === userId && realtimeChannel) return;
-  await stopChatStateSync();
-  cacheUserId = userId;
+  if (startingPromise) return startingPromise;
+  startingPromise = (async () => {
+    await stopChatStateSync();
+    cacheUserId = userId;
 
-  const { data, error } = await supabase
-    .from('user_chat_state')
-    .select('conversation_id, cleared_at')
-    .eq('user_id', userId);
-  if (error) {
-    console.error('chat state initial load failed', error);
-  } else {
-    clearedCache.clear();
-    for (const row of data ?? []) {
-      clearedCache.set(
-        row.conversation_id as string,
-        row.cleared_at ? new Date(row.cleared_at as string).getTime() : null
-      );
+    const { data, error } = await supabase
+      .from('user_chat_state')
+      .select('conversation_id, cleared_at')
+      .eq('user_id', userId);
+    if (error) {
+      console.error('chat state initial load failed', error);
+    } else {
+      clearedCache.clear();
+      for (const row of data ?? []) {
+        clearedCache.set(
+          row.conversation_id as string,
+          row.cleared_at ? new Date(row.cleared_at as string).getTime() : null
+        );
+      }
+      emit();
     }
-    emit();
-  }
 
-  realtimeChannel = supabase
-    .channel(`user-chat-state-${userId}`)
-    .on(
+    const channel = supabase.channel(`user-chat-state-${userId}-${Date.now()}`);
+    channel.on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'user_chat_state', filter: `user_id=eq.${userId}` },
       (payload) => {
@@ -115,8 +116,11 @@ export async function startChatStateSync(userId: string) {
         }
         emit();
       }
-    )
-    .subscribe();
+    );
+    channel.subscribe();
+    realtimeChannel = channel;
+  })();
+  try { await startingPromise; } finally { startingPromise = null; }
 }
 
 export async function stopChatStateSync() {
