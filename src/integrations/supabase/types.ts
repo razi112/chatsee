@@ -19,18 +19,21 @@ export type Database = {
           conversation_id: string
           id: string
           joined_at: string
+          role: string
           user_id: string
         }
         Insert: {
           conversation_id: string
           id?: string
           joined_at?: string
+          role?: string
           user_id: string
         }
         Update: {
           conversation_id?: string
           id?: string
           joined_at?: string
+          role?: string
           user_id?: string
         }
         Relationships: [
@@ -52,18 +55,30 @@ export type Database = {
       }
       conversations: {
         Row: {
+          avatar_url: string | null
           created_at: string
+          created_by: string | null
           id: string
+          is_group: boolean
+          name: string | null
           updated_at: string
         }
         Insert: {
+          avatar_url?: string | null
           created_at?: string
+          created_by?: string | null
           id?: string
+          is_group?: boolean
+          name?: string | null
           updated_at?: string
         }
         Update: {
+          avatar_url?: string | null
           created_at?: string
+          created_by?: string | null
           id?: string
+          is_group?: boolean
+          name?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -146,6 +161,103 @@ export type Database = {
         }
         Relationships: []
       }
+      status_replies: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          sender_id: string
+          status_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          sender_id: string
+          status_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          sender_id?: string
+          status_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "status_replies_status_id_fkey"
+            columns: ["status_id"]
+            isOneToOne: false
+            referencedRelation: "statuses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      status_views: {
+        Row: {
+          id: string
+          status_id: string
+          viewed_at: string
+          viewer_id: string
+        }
+        Insert: {
+          id?: string
+          status_id: string
+          viewed_at?: string
+          viewer_id: string
+        }
+        Update: {
+          id?: string
+          status_id?: string
+          viewed_at?: string
+          viewer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "status_views_status_id_fkey"
+            columns: ["status_id"]
+            isOneToOne: false
+            referencedRelation: "statuses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      statuses: {
+        Row: {
+          background_color: string | null
+          caption: string | null
+          content: string
+          created_at: string
+          expires_at: string
+          font_style: string | null
+          id: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          background_color?: string | null
+          caption?: string | null
+          content: string
+          created_at?: string
+          expires_at?: string
+          font_style?: string | null
+          id?: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          background_color?: string | null
+          caption?: string | null
+          content?: string
+          created_at?: string
+          expires_at?: string
+          font_style?: string | null
+          id?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_chat_state: {
         Row: {
           cleared_at: string | null
@@ -181,6 +293,14 @@ export type Database = {
       create_direct_conversation: {
         Args: { _other_user: string }
         Returns: string
+      }
+      create_group_conversation: {
+        Args: { _avatar_url?: string; _member_ids: string[]; _name: string }
+        Returns: string
+      }
+      is_conversation_admin: {
+        Args: { _conv_id: string; _user_id: string }
+        Returns: boolean
       }
       is_conversation_participant: {
         Args: { _conversation_id: string; _user_id: string }
