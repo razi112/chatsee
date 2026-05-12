@@ -160,11 +160,20 @@ export default function Sidebar({
             </div>
           ) : (
             filteredConversations.map(conversation => {
-              const other = getOtherParticipant(conversation);
-              if (!other) return null;
+              const isGroup = !!conversation.is_group;
+              const other = isGroup ? null : getOtherParticipant(conversation);
+              if (!isGroup && !other) return null;
 
               const isSelected = currentConversation?.id === conversation.id;
               const lastMessage = conversation.lastMessage;
+
+              const displayName = isGroup
+                ? conversation.name || 'Group'
+                : other!.display_name || other!.email.split('@')[0];
+              const avatarUrl = isGroup ? conversation.avatar_url : other!.avatar_url;
+              const fallbackInitials = isGroup
+                ? (conversation.name || 'G').slice(0, 2).toUpperCase()
+                : getInitials(other!.display_name, other!.email);
 
               return (
                 <button
@@ -172,26 +181,24 @@ export default function Sidebar({
                   onClick={() => onSelectConversation(conversation)}
                   className={cn(
                     "w-full p-3 rounded-lg flex items-center gap-3 transition-colors text-left",
-                    isSelected 
-                      ? "bg-primary/10" 
-                      : "hover:bg-secondary"
+                    isSelected ? "bg-primary/10" : "hover:bg-secondary"
                   )}
                 >
                   <div className="relative">
                     <Avatar className="w-12 h-12">
-                      <AvatarImage src={other.avatar_url || undefined} />
+                      <AvatarImage src={avatarUrl || undefined} />
                       <AvatarFallback className="bg-primary/20 text-primary font-medium">
-                        {getInitials(other.display_name, other.email)}
+                        {isGroup ? <Users className="w-5 h-5" /> : fallbackInitials}
                       </AvatarFallback>
                     </Avatar>
-                    {other.is_online && (
+                    {!isGroup && other!.is_online && (
                       <span className="absolute bottom-0 right-0 w-3 h-3 bg-online rounded-full border-2 border-sidebar animate-pulse-online" />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <span className="font-medium text-foreground truncate">
-                        {other.display_name || other.email.split('@')[0]}
+                        {displayName}
                       </span>
                       {lastMessage && (
                         <span className="text-xs text-muted-foreground">
@@ -200,7 +207,7 @@ export default function Sidebar({
                       )}
                     </div>
                     <p className="text-sm text-muted-foreground truncate">
-                      {lastMessage?.content || other.status || 'Start a conversation'}
+                      {lastMessage?.content || (isGroup ? `${conversation.participants.length} members` : other!.status) || 'Start a conversation'}
                     </p>
                   </div>
                 </button>
@@ -217,6 +224,16 @@ export default function Sidebar({
         profiles={profiles}
         onSelectUser={onStartConversation}
       />
+
+      {/* Create Group Dialog */}
+      {onCreateGroup && (
+        <CreateGroupDialog
+          open={showCreateGroup}
+          onOpenChange={setShowCreateGroup}
+          profiles={profiles}
+          onCreate={onCreateGroup}
+        />
+      )}
 
       {/* Profile / Settings Dialog */}
       <ProfileSettingsDialog open={showProfile} onOpenChange={setShowProfile} />
