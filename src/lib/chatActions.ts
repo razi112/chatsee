@@ -51,6 +51,7 @@ const BLOCK_KEY = (userId: string) => `chat-blocked:${userId}`;
 const clearedCache = new Map<string, number | null>();
 let cacheUserId: string | null = null;
 let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
+let startingPromise: Promise<void> | null = null;
 
 function emit() {
   window.dispatchEvent(new Event('chat-actions-changed'));
