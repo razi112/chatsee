@@ -1,15 +1,22 @@
 import { useEffect, useState } from 'react';
-import { Search, Plus, LogOut, Settings, MessageCircle } from 'lucide-react';
+import { Search, Plus, LogOut, Settings, MessageCircle, Users, UserPlus } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/contexts/AuthContext';
 import { Conversation, Profile } from '@/hooks/useChat';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import NewChatDialog from './NewChatDialog';
 import ProfileSettingsDialog from './ProfileSettingsDialog';
+import CreateGroupDialog from './CreateGroupDialog';
 import { isDeleted, onChatActionsChanged } from '@/lib/chatActions';
 
 interface SidebarProps {
