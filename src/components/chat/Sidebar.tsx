@@ -91,15 +91,26 @@ export default function Sidebar({
           <span className="font-semibold text-foreground">My Profile</span>
         </button>
         <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-muted-foreground hover:text-foreground hover:bg-secondary"
-            onClick={() => setShowNewChat(true)}
-            title="New chat"
-          >
-            <Plus className="w-5 h-5" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-muted-foreground hover:text-foreground hover:bg-secondary"
+                title="New"
+              >
+                <Plus className="w-5 h-5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="bg-popover">
+              <DropdownMenuItem onClick={() => setShowNewChat(true)}>
+                <UserPlus className="w-4 h-4 mr-2" /> New chat
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setShowCreateGroup(true)}>
+                <Users className="w-4 h-4 mr-2" /> New group
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button
             variant="ghost"
             size="icon"
