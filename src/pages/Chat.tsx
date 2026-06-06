@@ -6,6 +6,7 @@ import { usePresence } from '@/hooks/usePresence';
 import Sidebar from '@/components/chat/Sidebar';
 import ChatArea from '@/components/chat/ChatArea';
 import StatusView from '@/components/chat/StatusView';
+import CallsView from '@/components/chat/CallsView';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Loader2, MessageCircle, Circle, Phone } from 'lucide-react';
 import { cn } from '@/lib/utils';
