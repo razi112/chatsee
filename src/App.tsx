@@ -15,21 +15,32 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+const CallOverlays = () => {
+  const { call } = useCall();
+  return <>
+    <IncomingCallDialog />
+    {call && <CallScreen />}
+  </>;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/chat" element={<Chat />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
+      <CallProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/chat" element={<Chat />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+            <CallOverlays />
+          </BrowserRouter>
+        </TooltipProvider>
+      </CallProvider>
     </AuthProvider>
   </QueryClientProvider>
 );
