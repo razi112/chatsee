@@ -36,6 +36,7 @@ import {
   unclearChat,
 } from '@/lib/chatActions';
 import { useToast } from '@/hooks/use-toast';
+import { useCall } from '@/contexts/CallContext';
 
 const EMOJIS = ['😀','😁','😂','🤣','😊','😍','😘','😎','🤩','🥳','🤔','😴','😢','😭','😡','👍','👎','👏','🙏','💪','🔥','✨','🎉','❤️','💔','💯','😅','😉','😋','🤗','🤭','😇','🥰','😜','🤪','😏','😬','🙄','😤','🤯','😱','🥶','🤤','😈','👻','💀','🤖','🎁','☕','🍕'];
 
@@ -49,6 +50,7 @@ interface ChatAreaProps {
 export default function ChatArea({ conversation, messages, onSendMessage, onBack }: ChatAreaProps) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { startCall } = useCall();
   const [newMessage, setNewMessage] = useState('');
   const [showDebug, setShowDebug] = useState(false);
   const [lagMs, setLagMs] = useState(0);
@@ -320,10 +322,24 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
           >
             <Bug className="w-5 h-5" />
           </Button>
-          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground hover:text-foreground"
+            disabled={conversation.is_group || !otherParticipant}
+            onClick={() => otherParticipant && startCall(otherParticipant, 'video', conversation.id)}
+            title="Video call"
+          >
             <Video className="w-5 h-5" />
           </Button>
-          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground hover:text-foreground"
+            disabled={conversation.is_group || !otherParticipant}
+            onClick={() => otherParticipant && startCall(otherParticipant, 'voice', conversation.id)}
+            title="Voice call"
+          >
             <Phone className="w-5 h-5" />
           </Button>
           <DropdownMenu>

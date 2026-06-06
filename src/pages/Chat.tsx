@@ -6,6 +6,7 @@ import { usePresence } from '@/hooks/usePresence';
 import Sidebar from '@/components/chat/Sidebar';
 import ChatArea from '@/components/chat/ChatArea';
 import StatusView from '@/components/chat/StatusView';
+import CallsView from '@/components/chat/CallsView';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Loader2, MessageCircle, Circle, Phone } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -82,17 +83,7 @@ export default function Chat() {
     />
   );
   const StatusPanel = <StatusView profiles={profiles} />;
-  const CallsPanel = (
-    <div className="w-full md:w-80 lg:w-96 h-full flex flex-col bg-sidebar border-r border-border">
-      <div className="p-4 border-b border-border">
-        <h1 className="text-xl font-semibold text-foreground">Calls</h1>
-      </div>
-      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-        <Phone className="w-12 h-12 text-muted-foreground mb-3" />
-        <p className="text-muted-foreground">Calls coming soon</p>
-      </div>
-    </div>
-  );
+  const CallsPanel = <CallsView profiles={profiles} />;
 
   const activePanel = tab === 'chats' ? ChatsPanel : tab === 'status' ? StatusPanel : CallsPanel;
 
@@ -130,7 +121,7 @@ export default function Chat() {
             ) : (
               <div className="flex-1 hidden md:flex items-center justify-center bg-background">
                 <p className="text-muted-foreground">
-                  {tab === 'status' ? 'Select a status to view' : 'Calls coming soon'}
+                  {tab === 'status' ? 'Select a status to view' : 'Select a contact to call'}
                 </p>
               </div>
             )}
