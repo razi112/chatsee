@@ -137,7 +137,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const updateCallRow = useCallback(async (id: string, patch: Record<string, unknown>) => {
+  const updateCallRow = useCallback(async (id: string, patch: Partial<{ status: string; answered_at: string; ended_at: string; duration_seconds: number; call_type: string }>) => {
     await supabase.from('calls').update(patch).eq('id', id);
   }, []);
 
