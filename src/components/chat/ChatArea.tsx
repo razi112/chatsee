@@ -50,6 +50,7 @@ interface ChatAreaProps {
 export default function ChatArea({ conversation, messages, onSendMessage, onBack }: ChatAreaProps) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { startCall } = useCall();
   const [newMessage, setNewMessage] = useState('');
   const [showDebug, setShowDebug] = useState(false);
   const [lagMs, setLagMs] = useState(0);
