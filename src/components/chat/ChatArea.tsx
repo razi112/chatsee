@@ -322,10 +322,24 @@ export default function ChatArea({ conversation, messages, onSendMessage, onBack
           >
             <Bug className="w-5 h-5" />
           </Button>
-          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground hover:text-foreground"
+            disabled={conversation.is_group || !otherParticipant}
+            onClick={() => otherParticipant && startCall(otherParticipant, 'video', conversation.id)}
+            title="Video call"
+          >
             <Video className="w-5 h-5" />
           </Button>
-          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground hover:text-foreground"
+            disabled={conversation.is_group || !otherParticipant}
+            onClick={() => otherParticipant && startCall(otherParticipant, 'voice', conversation.id)}
+            title="Voice call"
+          >
             <Phone className="w-5 h-5" />
           </Button>
           <DropdownMenu>
