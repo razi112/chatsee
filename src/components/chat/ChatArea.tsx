@@ -36,6 +36,7 @@ import {
   unclearChat,
 } from '@/lib/chatActions';
 import { useToast } from '@/hooks/use-toast';
+import { useCall } from '@/contexts/CallContext';
 
 const EMOJIS = ['😀','😁','😂','🤣','😊','😍','😘','😎','🤩','🥳','🤔','😴','😢','😭','😡','👍','👎','👏','🙏','💪','🔥','✨','🎉','❤️','💔','💯','😅','😉','😋','🤗','🤭','😇','🥰','😜','🤪','😏','😬','🙄','😤','🤯','😱','🥶','🤤','😈','👻','💀','🤖','🎁','☕','🍕'];
 
