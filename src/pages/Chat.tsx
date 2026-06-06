@@ -121,7 +121,7 @@ export default function Chat() {
             ) : (
               <div className="flex-1 hidden md:flex items-center justify-center bg-background">
                 <p className="text-muted-foreground">
-                  {tab === 'status' ? 'Select a status to view' : 'Calls coming soon'}
+                  {tab === 'status' ? 'Select a status to view' : 'Select a contact to call'}
                 </p>
               </div>
             )}
