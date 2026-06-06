@@ -83,17 +83,7 @@ export default function Chat() {
     />
   );
   const StatusPanel = <StatusView profiles={profiles} />;
-  const CallsPanel = (
-    <div className="w-full md:w-80 lg:w-96 h-full flex flex-col bg-sidebar border-r border-border">
-      <div className="p-4 border-b border-border">
-        <h1 className="text-xl font-semibold text-foreground">Calls</h1>
-      </div>
-      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-        <Phone className="w-12 h-12 text-muted-foreground mb-3" />
-        <p className="text-muted-foreground">Calls coming soon</p>
-      </div>
-    </div>
-  );
+  const CallsPanel = <CallsView profiles={profiles} />;
 
   const activePanel = tab === 'chats' ? ChatsPanel : tab === 'status' ? StatusPanel : CallsPanel;
 
