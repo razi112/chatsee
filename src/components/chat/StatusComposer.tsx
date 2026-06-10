@@ -69,6 +69,9 @@ export default function StatusComposer({ open, onOpenChange, onPosted }: Props) 
   const post = async () => {
     if (!user) return;
     setPosting(true);
+    const musicFields = music
+      ? { music_url: music.url, music_title: music.title, music_artist: music.artist, music_artwork: music.artwork }
+      : {};
     try {
       if (mode === 'text') {
         if (!text.trim()) { setPosting(false); return; }
@@ -77,6 +80,7 @@ export default function StatusComposer({ open, onOpenChange, onPosted }: Props) 
           type: 'text',
           content: text.trim(),
           background_color: bgColor,
+          ...musicFields,
         });
         if (error) throw error;
       } else {
@@ -94,6 +98,7 @@ export default function StatusComposer({ open, onOpenChange, onPosted }: Props) 
           type: isVideo ? 'video' : 'image',
           content: pub.publicUrl,
           caption: caption.trim() || null,
+          ...musicFields,
         });
         if (error) throw error;
       }
