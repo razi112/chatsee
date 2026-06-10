@@ -132,6 +132,14 @@ export default function StatusComposer({ open, onOpenChange, onPosted }: Props) 
               >
                 <ImageIcon className="w-4 h-4" />
               </Button>
+              <Button
+                size="icon"
+                variant={music ? 'default' : 'ghost'}
+                onClick={() => setMusicOpen(true)}
+                title="Add music"
+              >
+                <Music className="w-4 h-4" />
+              </Button>
             </div>
           </DialogTitle>
         </DialogHeader>
