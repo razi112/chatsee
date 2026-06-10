@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Image as ImageIcon, Type, X, Send } from 'lucide-react';
+import { Image as ImageIcon, Type, X, Send, Music } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -8,6 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import MusicPicker, { MusicTrack } from './MusicPicker';
 
 const BG_COLORS = [
   'hsl(220, 70%, 50%)',
@@ -33,6 +34,8 @@ export default function StatusComposer({ open, onOpenChange, onPosted }: Props) 
   const [preview, setPreview] = useState<string | null>(null);
   const [caption, setCaption] = useState('');
   const [posting, setPosting] = useState(false);
+  const [music, setMusic] = useState<MusicTrack | null>(null);
+  const [musicOpen, setMusicOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const reset = () => {
@@ -43,6 +46,7 @@ export default function StatusComposer({ open, onOpenChange, onPosted }: Props) 
     setPreview(null);
     setCaption('');
     setPosting(false);
+    setMusic(null);
   };
 
   const handleClose = (o: boolean) => {
@@ -65,6 +69,9 @@ export default function StatusComposer({ open, onOpenChange, onPosted }: Props) 
   const post = async () => {
     if (!user) return;
     setPosting(true);
+    const musicFields = music
+      ? { music_url: music.url, music_title: music.title, music_artist: music.artist, music_artwork: music.artwork }
+      : {};
     try {
       if (mode === 'text') {
         if (!text.trim()) { setPosting(false); return; }
@@ -73,6 +80,7 @@ export default function StatusComposer({ open, onOpenChange, onPosted }: Props) 
           type: 'text',
           content: text.trim(),
           background_color: bgColor,
+          ...musicFields,
         });
         if (error) throw error;
       } else {
@@ -90,6 +98,7 @@ export default function StatusComposer({ open, onOpenChange, onPosted }: Props) 
           type: isVideo ? 'video' : 'image',
           content: pub.publicUrl,
           caption: caption.trim() || null,
+          ...musicFields,
         });
         if (error) throw error;
       }
@@ -122,6 +131,14 @@ export default function StatusComposer({ open, onOpenChange, onPosted }: Props) 
                 onClick={() => fileInputRef.current?.click()}
               >
                 <ImageIcon className="w-4 h-4" />
+              </Button>
+              <Button
+                size="icon"
+                variant={music ? 'default' : 'ghost'}
+                onClick={() => setMusicOpen(true)}
+                title="Add music"
+              >
+                <Music className="w-4 h-4" />
               </Button>
             </div>
           </DialogTitle>
@@ -196,11 +213,25 @@ export default function StatusComposer({ open, onOpenChange, onPosted }: Props) 
           </>
         )}
 
+        {music && (
+          <div className="flex items-center gap-3 p-2 rounded-lg bg-secondary">
+            <img src={music.artwork} alt="" className="w-10 h-10 rounded-md object-cover" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-foreground truncate">{music.title}</p>
+              <p className="text-xs text-muted-foreground truncate">{music.artist}</p>
+            </div>
+            <Button size="icon" variant="ghost" onClick={() => setMusic(null)} title="Remove">
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        )}
+
         <Button onClick={post} disabled={posting || (mode === 'text' ? !text.trim() : !file)} className="w-full">
           <Send className="w-4 h-4 mr-2" />
           {posting ? 'Posting...' : 'Post status'}
         </Button>
       </DialogContent>
+      <MusicPicker open={musicOpen} onOpenChange={setMusicOpen} onPick={setMusic} />
     </Dialog>
   );
 }

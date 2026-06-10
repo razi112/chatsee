@@ -276,6 +276,10 @@ export type Database = {
           expires_at: string
           font_style: string | null
           id: string
+          music_artist: string | null
+          music_artwork: string | null
+          music_title: string | null
+          music_url: string | null
           type: string
           user_id: string
         }
@@ -287,6 +291,10 @@ export type Database = {
           expires_at?: string
           font_style?: string | null
           id?: string
+          music_artist?: string | null
+          music_artwork?: string | null
+          music_title?: string | null
+          music_url?: string | null
           type: string
           user_id: string
         }
@@ -298,6 +306,10 @@ export type Database = {
           expires_at?: string
           font_style?: string | null
           id?: string
+          music_artist?: string | null
+          music_artwork?: string | null
+          music_title?: string | null
+          music_url?: string | null
           type?: string
           user_id?: string
         }

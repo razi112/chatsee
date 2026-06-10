@@ -20,6 +20,10 @@ export interface StatusRow {
   caption: string | null;
   created_at: string;
   expires_at: string;
+  music_url: string | null;
+  music_title: string | null;
+  music_artist: string | null;
+  music_artwork: string | null;
 }
 
 interface UserStatusGroup {
