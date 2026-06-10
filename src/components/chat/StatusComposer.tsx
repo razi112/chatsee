@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Image as ImageIcon, Type, X, Send } from 'lucide-react';
+import { Image as ImageIcon, Type, X, Send, Music } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -8,6 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import MusicPicker, { MusicTrack } from './MusicPicker';
 
 const BG_COLORS = [
   'hsl(220, 70%, 50%)',
