@@ -31,6 +31,7 @@ export default function StatusViewer({ group, onClose }: Props) {
   const [paused, setPaused] = useState(false);
   const [viewsOpen, setViewsOpen] = useState(false);
   const [views, setViews] = useState<{ viewer_id: string; viewed_at: string; profile?: Profile }[]>([]);
+  const musicAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const current = group.statuses[idx];
   const isMine = current?.user_id === user?.id;
@@ -40,6 +41,28 @@ export default function StatusViewer({ group, onClose }: Props) {
     if (!user || !current || isMine) return;
     supabase.from('status_views').insert({ status_id: current.id, viewer_id: user.id }).then(() => {});
   }, [current?.id, user?.id, isMine]);
+
+  // Play attached music for the current status
+  useEffect(() => {
+    musicAudioRef.current?.pause();
+    musicAudioRef.current = null;
+    if (!current?.music_url) return;
+    if (current.type === 'video') return; // don't overlap with video audio
+    const a = new Audio(current.music_url);
+    a.loop = true;
+    musicAudioRef.current = a;
+    a.play().catch(() => {});
+    return () => { a.pause(); };
+  }, [current?.id, current?.music_url, current?.type]);
+
+  // Pause/resume music with the status itself
+  useEffect(() => {
+    const a = musicAudioRef.current;
+    if (!a) return;
+    if (paused) a.pause(); else a.play().catch(() => {});
+  }, [paused]);
+
+  useEffect(() => () => { musicAudioRef.current?.pause(); }, []);
 
   // Progress timer
   useEffect(() => {
