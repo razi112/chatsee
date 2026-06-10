@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { X, Send, Eye, Trash2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { X, Send, Eye, Trash2, Music } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
