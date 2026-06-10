@@ -34,6 +34,8 @@ export default function StatusComposer({ open, onOpenChange, onPosted }: Props) 
   const [preview, setPreview] = useState<string | null>(null);
   const [caption, setCaption] = useState('');
   const [posting, setPosting] = useState(false);
+  const [music, setMusic] = useState<MusicTrack | null>(null);
+  const [musicOpen, setMusicOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const reset = () => {
@@ -44,6 +46,7 @@ export default function StatusComposer({ open, onOpenChange, onPosted }: Props) 
     setPreview(null);
     setCaption('');
     setPosting(false);
+    setMusic(null);
   };
 
   const handleClose = (o: boolean) => {
