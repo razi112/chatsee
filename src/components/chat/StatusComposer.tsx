@@ -213,11 +213,25 @@ export default function StatusComposer({ open, onOpenChange, onPosted }: Props) 
           </>
         )}
 
+        {music && (
+          <div className="flex items-center gap-3 p-2 rounded-lg bg-secondary">
+            <img src={music.artwork} alt="" className="w-10 h-10 rounded-md object-cover" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-foreground truncate">{music.title}</p>
+              <p className="text-xs text-muted-foreground truncate">{music.artist}</p>
+            </div>
+            <Button size="icon" variant="ghost" onClick={() => setMusic(null)} title="Remove">
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        )}
+
         <Button onClick={post} disabled={posting || (mode === 'text' ? !text.trim() : !file)} className="w-full">
           <Send className="w-4 h-4 mr-2" />
           {posting ? 'Posting...' : 'Post status'}
         </Button>
       </DialogContent>
+      <MusicPicker open={musicOpen} onOpenChange={setMusicOpen} onPick={setMusic} />
     </Dialog>
   );
 }
