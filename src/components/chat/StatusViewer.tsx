@@ -202,10 +202,27 @@ export default function StatusViewer({ group, onClose }: Props) {
           />
         )}
         {current.caption && current.type !== 'text' && (
-          <div className="absolute bottom-4 left-0 right-0 text-center px-4">
+          <div className="absolute bottom-16 left-0 right-0 text-center px-4">
             <p className="text-foreground bg-background/70 inline-block px-3 py-1 rounded-lg text-sm">
               {current.caption}
             </p>
+          </div>
+        )}
+        {current.music_url && (
+          <div className="absolute bottom-3 left-3 right-3 flex justify-center pointer-events-none">
+            <div className="flex items-center gap-2 bg-black/60 backdrop-blur-sm text-white rounded-full pl-1 pr-3 py-1 max-w-xs">
+              {current.music_artwork ? (
+                <img src={current.music_artwork} alt="" className="w-7 h-7 rounded-full object-cover animate-spin-slow" />
+              ) : (
+                <span className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center">
+                  <Music className="w-3.5 h-3.5" />
+                </span>
+              )}
+              <div className="min-w-0 text-left">
+                <p className="text-xs font-medium truncate leading-tight">{current.music_title}</p>
+                <p className="text-[10px] opacity-80 truncate leading-tight">{current.music_artist}</p>
+              </div>
+            </div>
           </div>
         )}
       </div>
