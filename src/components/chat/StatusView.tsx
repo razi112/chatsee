@@ -70,7 +70,7 @@ export default function StatusView({ profiles }: Props) {
       .from('statuses')
       .select('*')
       .order('created_at', { ascending: true });
-    setStatuses((data || []) as StatusRow[]);
+    setStatuses(((data || []) as unknown) as StatusRow[]);
     if (user) {
       const { data: views } = await supabase
         .from('status_views')
