@@ -109,7 +109,7 @@ export default function MusicPicker({ open, onOpenChange, onPick }: Props) {
           />
         </div>
 
-        <ScrollArea className="h-80">
+        <div className="h-80 overflow-y-auto overflow-x-hidden">
           {loading && (
             <div className="flex justify-center py-6">
               <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
@@ -123,11 +123,11 @@ export default function MusicPicker({ open, onOpenChange, onPick }: Props) {
               Search for a track to add a 30-second preview to your status
             </p>
           )}
-          <div className="space-y-1 pr-3">
+          <div className="space-y-1 pr-1">
             {results.map((t) => (
               <div
                 key={t.trackId}
-                className="flex items-center gap-3 p-2 rounded-lg hover:bg-secondary group"
+                className="flex w-full items-center gap-3 p-2 rounded-lg hover:bg-secondary group"
               >
                 <div className="relative w-12 h-12 shrink-0">
                   <img src={t.artworkUrl100} alt="" className="w-12 h-12 rounded-md object-cover" />
@@ -158,7 +158,7 @@ export default function MusicPicker({ open, onOpenChange, onPick }: Props) {
               </div>
             ))}
           </div>
-        </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
   );
