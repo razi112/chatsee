@@ -147,8 +147,13 @@ export default function MusicPicker({ open, onOpenChange, onPick }: Props) {
                   <p className="text-sm font-medium text-foreground truncate">{t.trackName}</p>
                   <p className="text-xs text-muted-foreground truncate">{t.artistName}</p>
                 </div>
-                <Button size="sm" onClick={() => choose(t)}>
+                <Button
+                  size="sm"
+                  onClick={() => choose(t)}
+                  className="shrink-0 gap-1 px-3"
+                >
                   <Check className="w-4 h-4" />
+                  <span>Add</span>
                 </Button>
               </div>
             ))}
