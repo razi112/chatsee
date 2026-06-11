@@ -228,16 +228,38 @@ export default function StatusComposer({ open, onOpenChange, onPosted }: Props) 
           </>
         )}
 
-        {music && (
-          <div className="flex items-center gap-3 p-2 rounded-lg bg-secondary">
-            <img src={music.artwork} alt="" className="w-10 h-10 rounded-md object-cover" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-foreground truncate">{music.title}</p>
-              <p className="text-xs text-muted-foreground truncate">{music.artist}</p>
+        {music.length > 0 && (
+          <div className="rounded-lg bg-secondary p-2 space-y-1 max-h-48 overflow-y-auto">
+            <div className="flex items-center justify-between px-1 pb-1">
+              <p className="text-xs font-semibold text-muted-foreground">
+                {music.length} song{music.length > 1 ? 's' : ''} · plays in order
+              </p>
+              <button
+                onClick={() => setMusicOpen(true)}
+                className="text-xs text-primary hover:underline"
+              >
+                Edit
+              </button>
             </div>
-            <Button size="icon" variant="ghost" onClick={() => setMusic(null)} title="Remove">
-              <X className="w-4 h-4" />
-            </Button>
+            {music.map((m, i) => (
+              <div key={m.url} className="flex items-center gap-2 p-1.5 rounded-md bg-background/50">
+                <span className="text-xs font-mono w-5 text-center text-muted-foreground">{i + 1}</span>
+                <img src={m.artwork} alt="" className="w-8 h-8 rounded object-cover" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium truncate">{m.title}</p>
+                  <p className="text-[10px] text-muted-foreground truncate">{m.artist}</p>
+                </div>
+                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => moveMusic(i, -1)} disabled={i === 0}>
+                  <ArrowUp className="w-3.5 h-3.5" />
+                </Button>
+                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => moveMusic(i, 1)} disabled={i === music.length - 1}>
+                  <ArrowDown className="w-3.5 h-3.5" />
+                </Button>
+                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setMusic(music.filter((_, k) => k !== i))}>
+                  <X className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            ))}
           </div>
         )}
 
@@ -246,7 +268,12 @@ export default function StatusComposer({ open, onOpenChange, onPosted }: Props) 
           {posting ? 'Posting...' : 'Post status'}
         </Button>
       </DialogContent>
-      <MusicPicker open={musicOpen} onOpenChange={setMusicOpen} onPick={setMusic} />
+      <MusicPicker
+        open={musicOpen}
+        onOpenChange={setMusicOpen}
+        onPick={setMusic}
+        initialTracks={music}
+      />
     </Dialog>
   );
 }
