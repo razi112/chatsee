@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Image as ImageIcon, Type, X, Send, Music } from 'lucide-react';
+import { Image as ImageIcon, Type, X, Send, Music, ArrowUp, ArrowDown } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
