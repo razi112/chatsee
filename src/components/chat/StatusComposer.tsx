@@ -34,7 +34,7 @@ export default function StatusComposer({ open, onOpenChange, onPosted }: Props) 
   const [preview, setPreview] = useState<string | null>(null);
   const [caption, setCaption] = useState('');
   const [posting, setPosting] = useState(false);
-  const [music, setMusic] = useState<MusicTrack | null>(null);
+  const [music, setMusic] = useState<MusicTrack[]>([]);
   const [musicOpen, setMusicOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -46,7 +46,7 @@ export default function StatusComposer({ open, onOpenChange, onPosted }: Props) 
     setPreview(null);
     setCaption('');
     setPosting(false);
-    setMusic(null);
+    setMusic([]);
   };
 
   const handleClose = (o: boolean) => {
@@ -69,8 +69,15 @@ export default function StatusComposer({ open, onOpenChange, onPosted }: Props) 
   const post = async () => {
     if (!user) return;
     setPosting(true);
-    const musicFields = music
-      ? { music_url: music.url, music_title: music.title, music_artist: music.artist, music_artwork: music.artwork }
+    const first = music[0];
+    const musicFields: Record<string, any> = first
+      ? {
+          music_url: first.url,
+          music_title: first.title,
+          music_artist: first.artist,
+          music_artwork: first.artwork,
+          music_playlist: music,
+        }
       : {};
     try {
       if (mode === 'text') {
@@ -81,7 +88,7 @@ export default function StatusComposer({ open, onOpenChange, onPosted }: Props) 
           content: text.trim(),
           background_color: bgColor,
           ...musicFields,
-        });
+        } as any);
         if (error) throw error;
       } else {
         if (!file) { setPosting(false); return; }
@@ -99,7 +106,7 @@ export default function StatusComposer({ open, onOpenChange, onPosted }: Props) 
           content: pub.publicUrl,
           caption: caption.trim() || null,
           ...musicFields,
-        });
+        } as any);
         if (error) throw error;
       }
       toast.success('Status posted');
@@ -109,6 +116,14 @@ export default function StatusComposer({ open, onOpenChange, onPosted }: Props) 
       toast.error('Failed to post status', { description: e.message });
       setPosting(false);
     }
+  };
+
+  const moveMusic = (i: number, dir: -1 | 1) => {
+    const j = i + dir;
+    if (j < 0 || j >= music.length) return;
+    const copy = [...music];
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+    setMusic(copy);
   };
 
   return (
