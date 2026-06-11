@@ -149,7 +149,7 @@ export default function StatusComposer({ open, onOpenChange, onPosted }: Props) 
               </Button>
               <Button
                 size="icon"
-                variant={music ? 'default' : 'ghost'}
+                variant={music.length > 0 ? 'default' : 'ghost'}
                 onClick={() => setMusicOpen(true)}
                 title="Add music"
               >
