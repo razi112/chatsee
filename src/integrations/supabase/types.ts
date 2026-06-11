@@ -278,6 +278,7 @@ export type Database = {
           id: string
           music_artist: string | null
           music_artwork: string | null
+          music_playlist: Json | null
           music_title: string | null
           music_url: string | null
           type: string
@@ -293,6 +294,7 @@ export type Database = {
           id?: string
           music_artist?: string | null
           music_artwork?: string | null
+          music_playlist?: Json | null
           music_title?: string | null
           music_url?: string | null
           type: string
@@ -308,6 +310,7 @@ export type Database = {
           id?: string
           music_artist?: string | null
           music_artwork?: string | null
+          music_playlist?: Json | null
           music_title?: string | null
           music_url?: string | null
           type?: string

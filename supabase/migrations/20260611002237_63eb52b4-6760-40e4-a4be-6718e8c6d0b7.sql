@@ -1,0 +1,1 @@
+ALTER TABLE public.statuses ADD COLUMN IF NOT EXISTS music_playlist jsonb;
