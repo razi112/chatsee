@@ -10,6 +10,13 @@ import { formatDistanceToNow } from 'date-fns';
 import StatusComposer from './StatusComposer';
 import StatusViewer from './StatusViewer';
 
+export interface MusicTrackData {
+  url: string;
+  title: string;
+  artist: string;
+  artwork: string;
+}
+
 export interface StatusRow {
   id: string;
   user_id: string;
@@ -24,6 +31,7 @@ export interface StatusRow {
   music_title: string | null;
   music_artist: string | null;
   music_artwork: string | null;
+  music_playlist: MusicTrackData[] | null;
 }
 
 interface UserStatusGroup {

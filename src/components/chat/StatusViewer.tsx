@@ -32,9 +32,23 @@ export default function StatusViewer({ group, onClose }: Props) {
   const [viewsOpen, setViewsOpen] = useState(false);
   const [views, setViews] = useState<{ viewer_id: string; viewed_at: string; profile?: Profile }[]>([]);
   const musicAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [musicIdx, setMusicIdx] = useState(0);
 
   const current = group.statuses[idx];
   const isMine = current?.user_id === user?.id;
+
+  const playlist: { url: string; title: string; artist: string; artwork: string }[] = (() => {
+    if (!current) return [];
+    if (current.music_playlist && current.music_playlist.length > 0) return current.music_playlist;
+    if (current.music_url) return [{
+      url: current.music_url,
+      title: current.music_title || '',
+      artist: current.music_artist || '',
+      artwork: current.music_artwork || '',
+    }];
+    return [];
+  })();
+  const currentTrack = playlist[musicIdx] || playlist[0];
 
   // Mark as viewed
   useEffect(() => {
@@ -42,18 +56,26 @@ export default function StatusViewer({ group, onClose }: Props) {
     supabase.from('status_views').insert({ status_id: current.id, viewer_id: user.id }).then(() => {});
   }, [current?.id, user?.id, isMine]);
 
-  // Play attached music for the current status
+  // Reset playlist index when status changes
+  useEffect(() => { setMusicIdx(0); }, [current?.id]);
+
+  // Play the current track in the playlist
   useEffect(() => {
     musicAudioRef.current?.pause();
     musicAudioRef.current = null;
-    if (!current?.music_url) return;
-    if (current.type === 'video') return; // don't overlap with video audio
-    const a = new Audio(current.music_url);
-    a.loop = true;
+    if (!currentTrack) return;
+    if (current?.type === 'video') return; // don't overlap with video audio
+    const a = new Audio(currentTrack.url);
+    a.loop = playlist.length === 1;
     musicAudioRef.current = a;
     a.play().catch(() => {});
+    a.onended = () => {
+      if (playlist.length > 1) {
+        setMusicIdx((i) => (i + 1) % playlist.length);
+      }
+    };
     return () => { a.pause(); };
-  }, [current?.id, current?.music_url, current?.type]);
+  }, [current?.id, musicIdx, currentTrack?.url, current?.type, playlist.length]);
 
   // Pause/resume music with the status itself
   useEffect(() => {
@@ -208,20 +230,23 @@ export default function StatusViewer({ group, onClose }: Props) {
             </p>
           </div>
         )}
-        {current.music_url && (
+        {currentTrack && (
           <div className="absolute bottom-3 left-3 right-3 flex justify-center pointer-events-none">
             <div className="flex items-center gap-2 bg-black/60 backdrop-blur-sm text-white rounded-full pl-1 pr-3 py-1 max-w-xs">
-              {current.music_artwork ? (
-                <img src={current.music_artwork} alt="" className="w-7 h-7 rounded-full object-cover animate-spin-slow" />
+              {currentTrack.artwork ? (
+                <img src={currentTrack.artwork} alt="" className="w-7 h-7 rounded-full object-cover animate-spin-slow" />
               ) : (
                 <span className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center">
                   <Music className="w-3.5 h-3.5" />
                 </span>
               )}
               <div className="min-w-0 text-left">
-                <p className="text-xs font-medium truncate leading-tight">{current.music_title}</p>
-                <p className="text-[10px] opacity-80 truncate leading-tight">{current.music_artist}</p>
+                <p className="text-xs font-medium truncate leading-tight">{currentTrack.title}</p>
+                <p className="text-[10px] opacity-80 truncate leading-tight">{currentTrack.artist}</p>
               </div>
+              {playlist.length > 1 && (
+                <span className="text-[10px] opacity-70 ml-1 shrink-0">{musicIdx + 1}/{playlist.length}</span>
+              )}
             </div>
           </div>
         )}
