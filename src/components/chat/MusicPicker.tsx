@@ -123,7 +123,7 @@ export default function MusicPicker({ open, onOpenChange, onPick }: Props) {
               Search for a track to add a 30-second preview to your status
             </p>
           )}
-          <div className="space-y-1">
+          <div className="space-y-1 pr-3">
             {results.map((t) => (
               <div
                 key={t.trackId}
