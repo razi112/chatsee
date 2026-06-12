@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { Search, Music, Play, Pause, Check, Loader2, Flame, ArrowUp, ArrowDown, X, Plus } from 'lucide-react';
+import { Search, Music, Play, Pause, Check, Loader2, Flame, ArrowUp, ArrowDown, X, Plus, ListMusic } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+
+type Section = 'trending' | 'selected' | 'search';
 
 export interface MusicTrack {
   url: string;
@@ -39,6 +41,7 @@ export default function MusicPicker({ open, onOpenChange, onPick, initialTracks 
   const [trendingLoading, setTrendingLoading] = useState(false);
   const [playingUrl, setPlayingUrl] = useState<string | null>(null);
   const [picked, setPicked] = useState<MusicTrack[]>([]);
+  const [section, setSection] = useState<Section>('trending');
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const debounceRef = useRef<number | null>(null);
 
@@ -197,10 +200,21 @@ export default function MusicPicker({ open, onOpenChange, onPick, initialTracks 
     );
   };
 
+  const sections: { id: Section; label: string; icon: React.ReactNode; badge?: number }[] = [
+    { id: 'trending', label: 'Trending', icon: <Flame className="w-4 h-4" /> },
+    { id: 'selected', label: 'Selected', icon: <ListMusic className="w-4 h-4" />, badge: picked.length || undefined },
+    { id: 'search', label: 'Search', icon: <Search className="w-4 h-4" /> },
+  ];
+
+  // Auto-switch to Search section once the user starts typing
+  useEffect(() => {
+    if (query.trim() && section !== 'search') setSection('search');
+  }, [query]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md bg-card border-border">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-2xl bg-card border-border p-0 overflow-hidden">
+        <DialogHeader className="px-4 pt-4">
           <DialogTitle className="flex items-center gap-2">
             <Music className="w-5 h-5" /> Add music
             {picked.length > 0 && (
@@ -211,85 +225,145 @@ export default function MusicPicker({ open, onOpenChange, onPick, initialTracks 
           </DialogTitle>
         </DialogHeader>
 
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            autoFocus
-            placeholder="Search songs or artists..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="pl-9 bg-secondary border-0"
-          />
-        </div>
-
-        {/* Selected playlist with reorder */}
-        {picked.length > 0 && (
-          <div className="rounded-lg border border-border p-2 space-y-1 max-h-40 overflow-y-auto">
-            <p className="text-xs font-semibold text-muted-foreground px-1">Your playlist (in order)</p>
-            {picked.map((p, i) => (
-              <div key={p.url} className="flex items-center gap-2 p-1.5 rounded-md bg-secondary/60">
-                <span className="text-xs font-mono w-5 text-center text-muted-foreground">{i + 1}</span>
-                <img src={p.artwork} alt="" className="w-8 h-8 rounded object-cover" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium truncate">{p.title}</p>
-                  <p className="text-[10px] text-muted-foreground truncate">{p.artist}</p>
-                </div>
-                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => move(i, -1)} disabled={i === 0}>
-                  <ArrowUp className="w-3.5 h-3.5" />
-                </Button>
-                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => move(i, 1)} disabled={i === picked.length - 1}>
-                  <ArrowDown className="w-3.5 h-3.5" />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-7 w-7"
-                  onClick={() => setPicked(picked.filter((_, k) => k !== i))}
+        <div className="flex h-[480px] border-t border-border">
+          {/* Side panel */}
+          <aside className="w-36 shrink-0 border-r border-border bg-secondary/30 p-2 flex flex-col gap-1">
+            {sections.map((s) => {
+              const active = section === s.id;
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => setSection(s.id)}
+                  className={cn(
+                    'flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors',
+                    active
+                      ? 'bg-primary text-primary-foreground font-medium'
+                      : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                  )}
                 >
-                  <X className="w-3.5 h-3.5" />
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
+                  {s.icon}
+                  <span className="flex-1 text-left">{s.label}</span>
+                  {s.badge ? (
+                    <span className={cn(
+                      'text-[10px] font-mono px-1.5 py-0.5 rounded-full',
+                      active ? 'bg-primary-foreground/20' : 'bg-secondary'
+                    )}>
+                      {s.badge}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </aside>
 
-        <div className="h-72 overflow-y-auto overflow-x-hidden">
-          {query ? (
-            <>
-              {loading && (
-                <div className="flex justify-center py-6">
-                  <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+          {/* Main panel */}
+          <section className="flex-1 flex flex-col min-w-0">
+            {/* Search bar (shown for trending + search) */}
+            {section !== 'selected' && (
+              <div className="p-3 border-b border-border">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    autoFocus
+                    placeholder="Search songs or artists..."
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    className="pl-9 bg-secondary border-0"
+                  />
                 </div>
-              )}
-              {!loading && results.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-6">No results</p>
-              )}
-              <div className="space-y-1 pr-1">{results.map(renderRow)}</div>
-            </>
-          ) : (
-            <>
-              <div className="flex items-center gap-2 px-1 pb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                <Flame className="w-3.5 h-3.5 text-orange-500" /> Trending now
               </div>
-              {trendingLoading && (
-                <div className="flex justify-center py-6">
-                  <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-                </div>
+            )}
+
+            <div className="flex-1 overflow-y-auto overflow-x-hidden p-3">
+              {section === 'trending' && (
+                <>
+                  <div className="flex items-center gap-2 pb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    <Flame className="w-3.5 h-3.5 text-orange-500" /> Trending now
+                  </div>
+                  {trendingLoading && (
+                    <div className="flex justify-center py-6">
+                      <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                    </div>
+                  )}
+                  {!trendingLoading && trending.length === 0 && (
+                    <p className="text-sm text-muted-foreground text-center py-6">
+                      No trending tracks available
+                    </p>
+                  )}
+                  <div className="space-y-1">{trending.map(renderRow)}</div>
+                </>
               )}
-              {!trendingLoading && trending.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-6">
-                  Search for a track to add a preview to your status
-                </p>
+
+              {section === 'search' && (
+                <>
+                  {!query.trim() ? (
+                    <p className="text-sm text-muted-foreground text-center py-10">
+                      Type above to search songs or artists
+                    </p>
+                  ) : loading ? (
+                    <div className="flex justify-center py-6">
+                      <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : results.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-6">No results</p>
+                  ) : (
+                    <div className="space-y-1">{results.map(renderRow)}</div>
+                  )}
+                </>
               )}
-              <div className="space-y-1 pr-1">{trending.map(renderRow)}</div>
-            </>
-          )}
+
+              {section === 'selected' && (
+                <>
+                  <div className="flex items-center gap-2 pb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    <ListMusic className="w-3.5 h-3.5" /> Your playlist · plays in order
+                  </div>
+                  {picked.length === 0 ? (
+                    <div className="text-center py-10 space-y-2">
+                      <p className="text-sm text-muted-foreground">No songs selected yet</p>
+                      <Button size="sm" variant="outline" onClick={() => setSection('trending')}>
+                        Browse trending
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      {picked.map((p, i) => (
+                        <div key={p.url} className="flex items-center gap-2 p-2 rounded-md bg-secondary/60">
+                          <span className="text-xs font-mono w-5 text-center text-muted-foreground">{i + 1}</span>
+                          <img src={p.artwork} alt="" className="w-10 h-10 rounded object-cover" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{p.title}</p>
+                            <p className="text-xs text-muted-foreground truncate">{p.artist}</p>
+                          </div>
+                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => move(i, -1)} disabled={i === 0}>
+                            <ArrowUp className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => move(i, 1)} disabled={i === picked.length - 1}>
+                            <ArrowDown className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7"
+                            onClick={() => setPicked(picked.filter((_, k) => k !== i))}
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </section>
         </div>
 
-        <Button onClick={confirm} disabled={picked.length === 0} className="w-full">
-          <Check className="w-4 h-4 mr-2" />
-          {picked.length === 0 ? 'Select at least one song' : `Use ${picked.length} song${picked.length > 1 ? 's' : ''}`}
-        </Button>
+        <div className="p-3 border-t border-border">
+          <Button onClick={confirm} disabled={picked.length === 0} className="w-full">
+            <Check className="w-4 h-4 mr-2" />
+            {picked.length === 0 ? 'Select at least one song' : `Use ${picked.length} song${picked.length > 1 ? 's' : ''}`}
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );
