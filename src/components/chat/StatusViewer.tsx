@@ -66,15 +66,32 @@ export default function StatusViewer({ group, onClose }: Props) {
     if (!currentTrack) return;
     if (current?.type === 'video') return; // don't overlap with video audio
     const a = new Audio(currentTrack.url);
-    a.loop = playlist.length === 1;
+    const start = (currentTrack as any).start ?? 0;
+    const segment = (currentTrack as any).segment ?? 0;
+    a.loop = playlist.length === 1 && !segment;
     musicAudioRef.current = a;
-    a.play().catch(() => {});
+    const startPlayback = () => {
+      try { a.currentTime = start; } catch {}
+      a.play().catch(() => {});
+    };
+    if (a.readyState >= 1) startPlayback();
+    else a.addEventListener('loadedmetadata', startPlayback, { once: true });
+    const onTime = () => {
+      if (segment > 0 && a.currentTime >= start + segment) {
+        if (playlist.length > 1) {
+          setMusicIdx((i) => (i + 1) % playlist.length);
+        } else {
+          try { a.currentTime = start; } catch {}
+        }
+      }
+    };
+    a.addEventListener('timeupdate', onTime);
     a.onended = () => {
       if (playlist.length > 1) {
         setMusicIdx((i) => (i + 1) % playlist.length);
       }
     };
-    return () => { a.pause(); };
+    return () => { a.pause(); a.removeEventListener('timeupdate', onTime); };
   }, [current?.id, musicIdx, currentTrack?.url, current?.type, playlist.length]);
 
   // Pause/resume music with the status itself
