@@ -10,6 +10,8 @@ export interface MusicTrack {
   title: string;
   artist: string;
   artwork: string;
+  start?: number;   // seconds into preview where playback begins
+  segment?: number; // seconds of preview to play
 }
 
 interface ITunesResult {
