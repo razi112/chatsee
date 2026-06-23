@@ -252,7 +252,7 @@ export default function Chat() {
           >
             {item.icon}
             {item.hasDot && (
-              <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-black/85" />
+              <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-red-500 rounded-full" />
             )}
           </button>
         );
