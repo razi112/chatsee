@@ -232,7 +232,7 @@ export default function Chat() {
   ];
 
   const FloatingNav = (
-    <nav className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1 px-2 py-2 rounded-3xl bg-black/85 backdrop-blur-xl border border-white/10 shadow-2xl">
+    <nav className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1 px-2 py-2">
       {navItems.map((item) => {
         const active = tab === item.key;
         return (
@@ -252,7 +252,7 @@ export default function Chat() {
           >
             {item.icon}
             {item.hasDot && (
-              <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-black/85" />
+              <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-red-500 rounded-full" />
             )}
           </button>
         );
