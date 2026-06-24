@@ -1,11 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { MessageCircle, AtSign, Lock, Mail, Loader2, Eye, EyeOff } from 'lucide-react';
+import {
+  MessageCircle, AtSign, Lock, Mail,
+  Loader2, Eye, EyeOff, CheckCircle2, XCircle,
+} from 'lucide-react';
 import { z } from 'zod';
+import { cn } from '@/lib/utils';
 
 const loginSchema = z.object({
   username: z.string().min(2, 'Username must be at least 2 characters'),
@@ -22,42 +27,23 @@ const signUpSchema = z.object({
   password: z.string().min(6, 'Password must be at least 6 characters'),
 });
 
-type LoginErrors = { username?: string; password?: string };
+type LoginErrors  = { username?: string; password?: string };
 type SignUpErrors = { username?: string; email?: string; password?: string };
+type CheckState   = 'idle' | 'checking' | 'found' | 'not_found' | 'available' | 'taken';
 
+// ── Reusable field wrapper ────────────────────────────────────────────────
 function FieldGroup({
-  id,
-  label,
-  type,
-  placeholder,
-  value,
-  onChange,
-  icon: Icon,
-  error,
-  autoComplete,
-  showToggle,
-  onToggle,
-  showPassword,
+  id, label, type, placeholder, value, onChange, icon: Icon,
+  error, hint, autoComplete, showToggle, onToggle, showPassword,
 }: {
-  id: string;
-  label: string;
-  type: string;
-  placeholder: string;
-  value: string;
-  onChange: (v: string) => void;
-  icon: React.ElementType;
-  error?: string;
-  autoComplete?: string;
-  showToggle?: boolean;
-  onToggle?: () => void;
-  showPassword?: boolean;
+  id: string; label: string; type: string; placeholder: string;
+  value: string; onChange: (v: string) => void; icon: React.ElementType;
+  error?: string; hint?: React.ReactNode; autoComplete?: string;
+  showToggle?: boolean; onToggle?: () => void; showPassword?: boolean;
 }) {
   return (
     <div className="space-y-1.5">
-      <label
-        htmlFor={id}
-        className="block text-xs font-semibold uppercase tracking-widest text-muted-foreground"
-      >
+      <label htmlFor={id} className="block text-xs font-semibold uppercase tracking-widest text-muted-foreground">
         {label}
       </label>
       <div className="relative group">
@@ -69,54 +55,130 @@ function FieldGroup({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           autoComplete={autoComplete}
-          className={`
-            pl-10 pr-${showToggle ? '10' : '4'} h-11
-            bg-secondary/40 border
-            ${error ? 'border-destructive focus-visible:ring-destructive/30' : 'border-border focus-visible:ring-primary/30'}
-            focus-visible:border-primary transition-all duration-150
-          `}
+          className={cn(
+            'pl-10 h-11 bg-secondary/40 border transition-all duration-150',
+            error
+              ? 'border-destructive focus-visible:ring-destructive/30'
+              : 'border-border focus-visible:ring-primary/30',
+            'focus-visible:border-primary',
+            showToggle ? 'pr-10' : 'pr-4',
+          )}
         />
         {showToggle && (
           <button
-            type="button"
-            onClick={onToggle}
+            type="button" onClick={onToggle} tabIndex={-1}
             className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-            tabIndex={-1}
             aria-label={showPassword ? 'Hide password' : 'Show password'}
           >
             {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           </button>
         )}
       </div>
-      {error && <p className="text-xs text-destructive">{error}</p>}
+      {/* Error or hint — error takes priority */}
+      {error ? (
+        <p className="text-xs text-destructive">{error}</p>
+      ) : hint ? (
+        <div className="text-xs">{hint}</div>
+      ) : null}
     </div>
   );
 }
 
+// ── Status badge shown below username field ───────────────────────────────
+function UsernameBadge({ state }: { state: CheckState }) {
+  if (state === 'idle') return null;
+
+  if (state === 'checking') {
+    return (
+      <span className="flex items-center gap-1.5 text-muted-foreground">
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        Checking…
+      </span>
+    );
+  }
+
+  const map: Record<string, { icon: React.ReactNode; text: string; color: string }> = {
+    found:     { icon: <CheckCircle2 className="w-3.5 h-3.5" />, text: 'Username found',    color: 'text-green-500'      },
+    not_found: { icon: <XCircle      className="w-3.5 h-3.5" />, text: 'Username not found', color: 'text-destructive'   },
+    available: { icon: <CheckCircle2 className="w-3.5 h-3.5" />, text: 'Available',          color: 'text-green-500'     },
+    taken:     { icon: <XCircle      className="w-3.5 h-3.5" />, text: 'Already taken',      color: 'text-destructive'   },
+  };
+
+  const info = map[state];
+  if (!info) return null;
+
+  return (
+    <span className={cn('flex items-center gap-1.5 font-medium', info.color)}>
+      {info.icon}
+      {info.text}
+    </span>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────
 export default function Auth() {
   const [tab, setTab] = useState<'login' | 'signup'>('login');
 
+  // Sign-in state
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
-  const [loginErrors, setLoginErrors] = useState<LoginErrors>({});
-  const [showLoginPw, setShowLoginPw] = useState(false);
+  const [loginErrors,   setLoginErrors]   = useState<LoginErrors>({});
+  const [showLoginPw,   setShowLoginPw]   = useState(false);
+  const [loginCheck,    setLoginCheck]    = useState<CheckState>('idle');
 
+  // Sign-up state
   const [signUpUsername, setSignUpUsername] = useState('');
-  const [signUpEmail, setSignUpEmail] = useState('');
+  const [signUpEmail,    setSignUpEmail]    = useState('');
   const [signUpPassword, setSignUpPassword] = useState('');
-  const [signUpErrors, setSignUpErrors] = useState<SignUpErrors>({});
-  const [showSignUpPw, setShowSignUpPw] = useState(false);
+  const [signUpErrors,   setSignUpErrors]   = useState<SignUpErrors>({});
+  const [showSignUpPw,   setShowSignUpPw]   = useState(false);
+  const [signUpCheck,    setSignUpCheck]    = useState<CheckState>('idle');
 
   const [loading, setLoading] = useState(false);
+
+  const loginDebounce  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const signUpDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { signIn, signUp, user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  useEffect(() => {
-    if (user) navigate('/');
-  }, [user, navigate]);
+  useEffect(() => { if (user) navigate('/'); }, [user, navigate]);
 
+  // ── Realtime check: Sign-in — does username exist? ────────────────────
+  useEffect(() => {
+    if (loginDebounce.current) clearTimeout(loginDebounce.current);
+    const u = loginUsername.trim();
+    if (u.length < 2) { setLoginCheck('idle'); return; }
+
+    setLoginCheck('checking');
+    loginDebounce.current = setTimeout(async () => {
+      const { data } = await supabase
+        .rpc('get_email_by_username', { p_username: u });
+      setLoginCheck(data ? 'found' : 'not_found');
+    }, 450);
+
+    return () => { if (loginDebounce.current) clearTimeout(loginDebounce.current); };
+  }, [loginUsername]);
+
+  // ── Realtime check: Sign-up — is username available? ─────────────────
+  useEffect(() => {
+    if (signUpDebounce.current) clearTimeout(signUpDebounce.current);
+    const u = signUpUsername.trim().toLowerCase();
+    // Only check if passes basic format rules
+    if (u.length < 2 || !/^[a-zA-Z0-9_]+$/.test(u)) { setSignUpCheck('idle'); return; }
+
+    setSignUpCheck('checking');
+    signUpDebounce.current = setTimeout(async () => {
+      const { data } = await supabase
+        .rpc('get_email_by_username', { p_username: u });
+      setSignUpCheck(data ? 'taken' : 'available');
+    }, 450);
+
+    return () => { if (signUpDebounce.current) clearTimeout(signUpDebounce.current); };
+  }, [signUpUsername]);
+
+  // ── Validation ────────────────────────────────────────────────────────
   const validateLogin = () => {
     try {
       loginSchema.parse({ username: loginUsername, password: loginPassword });
@@ -125,9 +187,7 @@ export default function Auth() {
     } catch (e) {
       if (e instanceof z.ZodError) {
         const errs: LoginErrors = {};
-        e.errors.forEach((err) => {
-          if (err.path[0]) errs[err.path[0] as keyof LoginErrors] = err.message;
-        });
+        e.errors.forEach(err => { if (err.path[0]) errs[err.path[0] as keyof LoginErrors] = err.message; });
         setLoginErrors(errs);
       }
       return false;
@@ -142,18 +202,27 @@ export default function Auth() {
     } catch (e) {
       if (e instanceof z.ZodError) {
         const errs: SignUpErrors = {};
-        e.errors.forEach((err) => {
-          if (err.path[0]) errs[err.path[0] as keyof SignUpErrors] = err.message;
-        });
+        e.errors.forEach(err => { if (err.path[0]) errs[err.path[0] as keyof SignUpErrors] = err.message; });
         setSignUpErrors(errs);
       }
       return false;
     }
   };
 
+  // ── Submit ────────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (tab === 'login' ? !validateLogin() : !validateSignUp()) return;
+
+    // Block submit if username is known taken (sign-up) or not found (sign-in)
+    if (tab === 'login' && loginCheck === 'not_found') {
+      toast({ title: 'Username not found', description: 'No account with that username.', variant: 'destructive' });
+      return;
+    }
+    if (tab === 'signup' && signUpCheck === 'taken') {
+      toast({ title: 'Username taken', description: 'Please choose a different username.', variant: 'destructive' });
+      return;
+    }
 
     setLoading(true);
     try {
@@ -173,11 +242,7 @@ export default function Auth() {
           toast({ title: 'Welcome back!' });
         }
       } else {
-        const { error } = await signUp(
-          signUpEmail,
-          signUpPassword,
-          signUpUsername.toLowerCase().trim()
-        );
+        const { error } = await signUp(signUpEmail, signUpPassword, signUpUsername.toLowerCase().trim());
         if (error) {
           toast({
             title: 'Sign up failed',
@@ -191,11 +256,7 @@ export default function Auth() {
         }
       }
     } catch {
-      toast({
-        title: 'Something went wrong',
-        description: 'An unexpected error occurred. Please try again.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Something went wrong', description: 'An unexpected error occurred.', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -205,6 +266,8 @@ export default function Auth() {
     setTab(next);
     setLoginErrors({});
     setSignUpErrors({});
+    setLoginCheck('idle');
+    setSignUpCheck('idle');
   };
 
   const isLogin = tab === 'login';
@@ -218,7 +281,7 @@ export default function Auth() {
       </div>
 
       <div className="relative w-full max-w-sm">
-        {/* Brand header */}
+        {/* Brand */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/15 border border-primary/20 mb-4 shadow-lg shadow-primary/10">
             <MessageCircle className="w-7 h-7 text-primary" />
@@ -232,41 +295,26 @@ export default function Auth() {
 
           {/* Tab switcher */}
           <div className="flex border-b border-border/60">
-            <button
-              type="button"
-              onClick={() => switchTab('login')}
-              className={`
-                flex-1 py-3.5 text-sm font-semibold transition-all duration-200 relative
-                ${isLogin
-                  ? 'text-primary'
-                  : 'text-muted-foreground hover:text-foreground'}
-              `}
-            >
-              Sign In
-              {isLogin && (
-                <span className="absolute bottom-0 left-4 right-4 h-0.5 bg-primary rounded-full" />
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => switchTab('signup')}
-              className={`
-                flex-1 py-3.5 text-sm font-semibold transition-all duration-200 relative
-                ${!isLogin
-                  ? 'text-primary'
-                  : 'text-muted-foreground hover:text-foreground'}
-              `}
-            >
-              Sign Up
-              {!isLogin && (
-                <span className="absolute bottom-0 left-4 right-4 h-0.5 bg-primary rounded-full" />
-              )}
-            </button>
+            {(['login', 'signup'] as const).map(t => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => switchTab(t)}
+                className={cn(
+                  'flex-1 py-3.5 text-sm font-semibold transition-all duration-200 relative',
+                  tab === t ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                {t === 'login' ? 'Sign In' : 'Sign Up'}
+                {tab === t && (
+                  <span className="absolute bottom-0 left-4 right-4 h-0.5 bg-primary rounded-full" />
+                )}
+              </button>
+            ))}
           </div>
 
-          {/* Form area */}
+          {/* Form */}
           <div className="p-6">
-            {/* Heading */}
             <div className="mb-6">
               <h2 className="text-xl font-bold text-foreground">
                 {isLogin ? 'Welcome back' : 'Create your account'}
@@ -282,110 +330,68 @@ export default function Auth() {
               {isLogin ? (
                 <>
                   <FieldGroup
-                    id="loginUsername"
-                    label="Username"
-                    type="text"
-                    placeholder="yourhandle"
-                    value={loginUsername}
-                    onChange={setLoginUsername}
-                    icon={AtSign}
-                    error={loginErrors.username}
-                    autoComplete="username"
+                    id="loginUsername" label="Username" type="text"
+                    placeholder="yourhandle" value={loginUsername}
+                    onChange={setLoginUsername} icon={AtSign}
+                    error={loginErrors.username} autoComplete="username"
+                    hint={<UsernameBadge state={loginCheck} />}
                   />
                   <FieldGroup
-                    id="loginPassword"
-                    label="Password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={loginPassword}
-                    onChange={setLoginPassword}
-                    icon={Lock}
-                    error={loginErrors.password}
-                    autoComplete="current-password"
-                    showToggle
-                    onToggle={() => setShowLoginPw((v) => !v)}
-                    showPassword={showLoginPw}
+                    id="loginPassword" label="Password" type="password"
+                    placeholder="••••••••" value={loginPassword}
+                    onChange={setLoginPassword} icon={Lock}
+                    error={loginErrors.password} autoComplete="current-password"
+                    showToggle onToggle={() => setShowLoginPw(v => !v)} showPassword={showLoginPw}
                   />
                 </>
               ) : (
                 <>
                   <FieldGroup
-                    id="signUpUsername"
-                    label="Username"
-                    type="text"
-                    placeholder="yourhandle"
-                    value={signUpUsername}
-                    onChange={setSignUpUsername}
-                    icon={AtSign}
-                    error={signUpErrors.username}
-                    autoComplete="username"
+                    id="signUpUsername" label="Username" type="text"
+                    placeholder="yourhandle" value={signUpUsername}
+                    onChange={setSignUpUsername} icon={AtSign}
+                    error={signUpErrors.username} autoComplete="username"
+                    hint={<UsernameBadge state={signUpCheck} />}
                   />
                   <FieldGroup
-                    id="signUpEmail"
-                    label="Email"
-                    type="email"
-                    placeholder="you@example.com"
-                    value={signUpEmail}
-                    onChange={setSignUpEmail}
-                    icon={Mail}
-                    error={signUpErrors.email}
-                    autoComplete="email"
+                    id="signUpEmail" label="Email" type="email"
+                    placeholder="you@example.com" value={signUpEmail}
+                    onChange={setSignUpEmail} icon={Mail}
+                    error={signUpErrors.email} autoComplete="email"
                   />
                   <FieldGroup
-                    id="signUpPassword"
-                    label="Password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={signUpPassword}
-                    onChange={setSignUpPassword}
-                    icon={Lock}
-                    error={signUpErrors.password}
-                    autoComplete="new-password"
-                    showToggle
-                    onToggle={() => setShowSignUpPw((v) => !v)}
-                    showPassword={showSignUpPw}
+                    id="signUpPassword" label="Password" type="password"
+                    placeholder="••••••••" value={signUpPassword}
+                    onChange={setSignUpPassword} icon={Lock}
+                    error={signUpErrors.password} autoComplete="new-password"
+                    showToggle onToggle={() => setShowSignUpPw(v => !v)} showPassword={showSignUpPw}
                   />
                 </>
               )}
 
               <Button
                 type="submit"
-                disabled={loading}
+                disabled={
+                  loading ||
+                  (isLogin  && loginCheck  === 'not_found') ||
+                  (!isLogin && signUpCheck === 'taken')
+                }
                 className="w-full h-11 mt-2 font-semibold bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 transition-all duration-150"
               >
-                {loading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : isLogin ? (
-                  'Sign In'
-                ) : (
-                  'Create Account'
-                )}
+                {loading
+                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                  : isLogin ? 'Sign In' : 'Create Account'}
               </Button>
             </form>
 
-            {/* Footer toggle */}
             <p className="mt-5 text-center text-xs text-muted-foreground">
               {isLogin ? (
-                <>
-                  No account yet?{' '}
-                  <button
-                    type="button"
-                    onClick={() => switchTab('signup')}
-                    className="text-primary font-medium hover:underline"
-                  >
-                    Sign up
-                  </button>
+                <>No account yet?{' '}
+                  <button type="button" onClick={() => switchTab('signup')} className="text-primary font-medium hover:underline">Sign up</button>
                 </>
               ) : (
-                <>
-                  Already have an account?{' '}
-                  <button
-                    type="button"
-                    onClick={() => switchTab('login')}
-                    className="text-primary font-medium hover:underline"
-                  >
-                    Sign in
-                  </button>
+                <>Already have an account?{' '}
+                  <button type="button" onClick={() => switchTab('login')} className="text-primary font-medium hover:underline">Sign in</button>
                 </>
               )}
             </p>
