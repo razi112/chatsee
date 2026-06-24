@@ -6,8 +6,8 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signUp: (email: string, password: string, displayName?: string) => Promise<{ error: Error | null }>;
-  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, username: string, displayName?: string) => Promise<{ error: Error | null }>;
+  signIn: (username: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -38,25 +38,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signUp = async (email: string, password: string, displayName?: string) => {
+  const signUp = async (email: string, password: string, username: string, displayName?: string) => {
     const redirectUrl = `${window.location.origin}/`;
-    
+
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo: redirectUrl,
         data: {
-          display_name: displayName || email.split('@')[0],
+          display_name: displayName || username,
+          username,
         },
       },
     });
     return { error };
   };
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (username: string, password: string) => {
+    // Use a security-definer RPC so the anon role can resolve the email
+    // without needing direct SELECT on the profiles table.
+    const { data: email, error: lookupError } = await supabase
+      .rpc('get_email_by_username', { p_username: username });
+
+    if (lookupError) {
+      return { error: lookupError };
+    }
+
+    if (!email) {
+      return { error: new Error('No account found with that username.') };
+    }
+
     const { error } = await supabase.auth.signInWithPassword({
-      email,
+      email: email as string,
       password,
     });
     return { error };

@@ -21,7 +21,7 @@ interface Props {
   onClose: () => void;
 }
 
-const DURATION_MS = 5000;
+const DURATION_MS = 40000; // 40 seconds for text and image statuses
 
 export default function StatusViewer({ group, onClose }: Props) {
   const { user } = useAuth();
@@ -65,31 +65,35 @@ export default function StatusViewer({ group, onClose }: Props) {
     musicAudioRef.current = null;
     if (!currentTrack) return;
     if (current?.type === 'video') return; // don't overlap with video audio
+
+    // start/segment are stored directly in the playlist JSON objects
+    const trackStart   = (currentTrack as any).start   ?? 0;
+    const trackSegment = (currentTrack as any).segment ?? 0; // 0 = play to end
+
     const a = new Audio(currentTrack.url);
-    const start = (currentTrack as any).start ?? 0;
-    const segment = (currentTrack as any).segment ?? 0;
-    a.loop = playlist.length === 1 && !segment;
+    a.loop = playlist.length === 1 && trackSegment === 0;
     musicAudioRef.current = a;
+
     const startPlayback = () => {
-      try { a.currentTime = start; } catch {}
+      try { a.currentTime = trackStart; } catch {}
       a.play().catch(() => {});
     };
     if (a.readyState >= 1) startPlayback();
     else a.addEventListener('loadedmetadata', startPlayback, { once: true });
+
     const onTime = () => {
-      if (segment > 0 && a.currentTime >= start + segment) {
+      if (trackSegment > 0 && a.currentTime >= trackStart + trackSegment) {
+        // Advance to next track or loop back to start of segment
         if (playlist.length > 1) {
           setMusicIdx((i) => (i + 1) % playlist.length);
         } else {
-          try { a.currentTime = start; } catch {}
+          try { a.currentTime = trackStart; } catch {}
         }
       }
     };
     a.addEventListener('timeupdate', onTime);
     a.onended = () => {
-      if (playlist.length > 1) {
-        setMusicIdx((i) => (i + 1) % playlist.length);
-      }
+      if (playlist.length > 1) setMusicIdx((i) => (i + 1) % playlist.length);
     };
     return () => { a.pause(); a.removeEventListener('timeupdate', onTime); };
   }, [current?.id, musicIdx, currentTrack?.url, current?.type, playlist.length]);

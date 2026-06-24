@@ -1,5 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
-import { Search, Music, Play, Pause, Check, Loader2, Flame, ArrowUp, ArrowDown, X, Plus, ListMusic } from 'lucide-react';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import {
+  Search, Music, Play, Pause, Check, Loader2,
+  Flame, ArrowUp, ArrowDown, X, Plus, ListMusic,
+} from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -12,8 +15,8 @@ export interface MusicTrack {
   title: string;
   artist: string;
   artwork: string;
-  start?: number;   // seconds into preview where playback begins
-  segment?: number; // seconds of preview to play
+  start?: number;
+  segment?: number;
 }
 
 interface ITunesResult {
@@ -31,114 +34,137 @@ interface Props {
   initialTracks?: MusicTrack[];
 }
 
-const TRENDING_TERMS = ['top hits 2026', 'viral pop', 'trending', 'global top 50'];
+const TRENDING_TERMS = ['top hits 2025', 'viral pop 2025', 'global top 50', 'hot right now'];
 
 export default function MusicPicker({ open, onOpenChange, onPick, initialTracks }: Props) {
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<ITunesResult[]>([]);
-  const [trending, setTrending] = useState<ITunesResult[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [trendingLoading, setTrendingLoading] = useState(false);
-  const [playingUrl, setPlayingUrl] = useState<string | null>(null);
-  const [picked, setPicked] = useState<MusicTrack[]>([]);
-  const [section, setSection] = useState<Section>('trending');
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const debounceRef = useRef<number | null>(null);
+  const [query,          setQuery]          = useState('');
+  const [results,        setResults]        = useState<ITunesResult[]>([]);
+  const [trending,       setTrending]       = useState<ITunesResult[]>([]);
+  const [loading,        setLoading]        = useState(false);
+  const [trendingLoad,   setTrendingLoad]   = useState(false);
+  const [playingUrl,     setPlayingUrl]     = useState<string | null>(null);
+  const [picked,         setPicked]         = useState<MusicTrack[]>([]);
+  const [section,        setSection]        = useState<Section>('trending');
 
+  const audioRef    = useRef<HTMLAudioElement | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Sync picked with initialTracks when dialog opens ────────────────────
   useEffect(() => {
     if (open) {
       setPicked(initialTracks ? [...initialTracks] : []);
+      setSection('trending');
+      setQuery('');
     } else {
-      audioRef.current?.pause();
-      setPlayingUrl(null);
+      stopAudio();
     }
-  }, [open]);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load trending list once when opened
+  // Cleanup on unmount
+  useEffect(() => () => stopAudio(), []);
+
+  const stopAudio = () => {
+    audioRef.current?.pause();
+    audioRef.current = null;
+    setPlayingUrl(null);
+  };
+
+  // ── Load trending once per open ──────────────────────────────────────────
   useEffect(() => {
-    if (!open || trending.length) return;
+    if (!open || trending.length > 0) return;
     (async () => {
-      setTrendingLoading(true);
+      setTrendingLoad(true);
       try {
-        // Try the iTunes top-songs RSS first (real chart data)
-        const rss = await fetch('https://itunes.apple.com/us/rss/topsongs/limit=25/json').then(r => r.json()).catch(() => null);
+        // Try iTunes top-songs RSS
+        const rss = await fetch('https://itunes.apple.com/us/rss/topsongs/limit=25/json')
+          .then(r => r.json()).catch(() => null);
         const entries = rss?.feed?.entry as any[] | undefined;
         if (entries?.length) {
           const mapped: ITunesResult[] = entries.map((e: any, i: number) => {
-            const preview = (e.link || []).find((l: any) => l.attributes?.rel === 'enclosure')?.attributes?.href;
-            const img = e['im:image']?.[2]?.label || e['im:image']?.[0]?.label;
+            const previewLink = (e.link || []).find((l: any) => l.attributes?.rel === 'enclosure');
+            const preview     = previewLink?.attributes?.href;
+            const img         = e['im:image']?.[2]?.label || e['im:image']?.[0]?.label;
             return {
-              trackId: Number(e.id?.attributes?.['im:id']) || i,
-              trackName: e['im:name']?.label || 'Unknown',
-              artistName: e['im:artist']?.label || '',
-              artworkUrl100: img,
-              previewUrl: preview,
+              trackId:       Number(e.id?.attributes?.['im:id']) || i,
+              trackName:     e['im:name']?.label     || 'Unknown',
+              artistName:    e['im:artist']?.label   || '',
+              artworkUrl100: img || '',
+              previewUrl:    preview,
             };
           }).filter((r: ITunesResult) => r.previewUrl);
-          if (mapped.length) { setTrending(mapped); return; }
+          if (mapped.length) { setTrending(mapped); setTrendingLoad(false); return; }
         }
-        // Fallback: aggregate searches of trending terms
+        // Fallback: aggregate searches
         const all: ITunesResult[] = [];
-        for (const term of TRENDING_TERMS) {
-          const r = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(term)}&media=music&limit=10`)
-            .then(r => r.json()).catch(() => null);
-          if (r?.results) all.push(...r.results.filter((x: ITunesResult) => x.previewUrl));
-        }
         const seen = new Set<number>();
-        setTrending(all.filter(t => !seen.has(t.trackId) && (seen.add(t.trackId), true)).slice(0, 25));
+        for (const term of TRENDING_TERMS) {
+          const r = await fetch(
+            `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&media=music&limit=12`
+          ).then(r => r.json()).catch(() => null);
+          if (r?.results) {
+            for (const t of r.results as ITunesResult[]) {
+              if (t.previewUrl && !seen.has(t.trackId)) {
+                seen.add(t.trackId);
+                all.push(t);
+              }
+            }
+          }
+        }
+        setTrending(all.slice(0, 30));
       } finally {
-        setTrendingLoading(false);
+        setTrendingLoad(false);
       }
     })();
-  }, [open]);
+  }, [open, trending.length]);
 
+  // ── Debounced search ────────────────────────────────────────────────────
   useEffect(() => {
-    if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!query.trim()) { setResults([]); return; }
-    debounceRef.current = window.setTimeout(async () => {
+    debounceRef.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const res = await fetch(
-          `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&limit=25`
+        const res  = await fetch(
+          `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&limit=30`
         );
         const data = await res.json();
         setResults((data.results || []).filter((r: ITunesResult) => r.previewUrl));
-      } catch {
-        setResults([]);
-      } finally {
-        setLoading(false);
-      }
-    }, 350);
-    return () => { if (debounceRef.current) window.clearTimeout(debounceRef.current); };
+      } catch { setResults([]); }
+      finally  { setLoading(false); }
+    }, 380);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [query]);
 
-  const togglePlay = (url: string) => {
-    if (playingUrl === url) {
-      audioRef.current?.pause();
-      setPlayingUrl(null);
-      return;
-    }
-    audioRef.current?.pause();
+  // Auto-switch to search tab when typing
+  useEffect(() => {
+    if (query.trim() && section !== 'search') setSection('search');
+  }, [query]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Audio preview ────────────────────────────────────────────────────────
+  const togglePlay = useCallback((url: string) => {
+    if (playingUrl === url) { stopAudio(); return; }
+    stopAudio();
     const a = new Audio(url);
     audioRef.current = a;
     a.play().catch(() => {});
     a.onended = () => setPlayingUrl(null);
     setPlayingUrl(url);
-  };
+  }, [playingUrl]);
 
-  const isPicked = (url?: string) => !!url && picked.some(p => p.url === url);
+  // ── Pick / reorder ────────────────────────────────────────────────────────
+  const isPicked  = (url?: string) => !!url && picked.some(p => p.url === url);
 
   const togglePick = (t: ITunesResult) => {
     if (!t.previewUrl) return;
     const url = t.previewUrl;
     if (isPicked(url)) {
-      setPicked(picked.filter(p => p.url !== url));
+      setPicked(prev => prev.filter(p => p.url !== url));
     } else {
-      setPicked([...picked, {
+      setPicked(prev => [...prev, {
         url,
-        title: t.trackName,
-        artist: t.artistName,
-        artwork: t.artworkUrl100.replace('100x100', '300x300'),
+        title:   t.trackName,
+        artist:  t.artistName,
+        artwork: t.artworkUrl100.replace('100x100bb', '400x400bb').replace('100x100', '300x300'),
       }]);
     }
   };
@@ -146,222 +172,250 @@ export default function MusicPicker({ open, onOpenChange, onPick, initialTracks 
   const move = (i: number, dir: -1 | 1) => {
     const j = i + dir;
     if (j < 0 || j >= picked.length) return;
-    const copy = [...picked];
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-    setPicked(copy);
+    setPicked(prev => {
+      const c = [...prev];
+      [c[i], c[j]] = [c[j], c[i]];
+      return c;
+    });
   };
 
   const confirm = () => {
-    audioRef.current?.pause();
-    setPlayingUrl(null);
+    stopAudio();
     onPick(picked);
     onOpenChange(false);
   };
 
+  // ── Row renderer ──────────────────────────────────────────────────────────
   const renderRow = (t: ITunesResult) => {
-    const url = t.previewUrl!;
+    const url      = t.previewUrl!;
     const selected = isPicked(url);
+    const isPlaying = playingUrl === url;
+
     return (
       <div
         key={t.trackId}
         className={cn(
-          'flex w-full items-center gap-3 p-2 rounded-lg group',
-          selected ? 'bg-primary/10' : 'hover:bg-secondary'
+          'group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors',
+          selected ? 'bg-primary/10' : 'hover:bg-secondary/70'
         )}
       >
-        <div className="relative w-12 h-12 shrink-0">
-          <img src={t.artworkUrl100} alt="" className="w-12 h-12 rounded-md object-cover" />
+        {/* Artwork + play overlay */}
+        <div className="relative w-11 h-11 shrink-0">
+          <img
+            src={t.artworkUrl100}
+            alt=""
+            className="w-11 h-11 rounded-lg object-cover shadow"
+          />
           <button
             onClick={() => togglePlay(url)}
-            className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 rounded-md transition-opacity"
-            aria-label={playingUrl === url ? 'Pause' : 'Preview'}
+            className="absolute inset-0 flex items-center justify-center bg-black/55 opacity-0 group-hover:opacity-100 rounded-lg transition-opacity"
+            aria-label={isPlaying ? 'Pause' : 'Preview'}
           >
-            {playingUrl === url ? (
-              <Pause className="w-5 h-5 text-white" fill="white" />
-            ) : (
-              <Play className="w-5 h-5 text-white" fill="white" />
-            )}
+            {isPlaying
+              ? <Pause className="w-4 h-4 text-white" fill="white" />
+              : <Play  className="w-4 h-4 text-white" fill="white" />}
           </button>
+          {/* Playing indicator ring */}
+          {isPlaying && (
+            <span className="absolute inset-0 rounded-lg ring-2 ring-primary animate-pulse pointer-events-none" />
+          )}
         </div>
+
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-foreground truncate">{t.trackName}</p>
+          <p className="text-sm font-medium text-foreground truncate leading-tight">{t.trackName}</p>
           <p className="text-xs text-muted-foreground truncate">{t.artistName}</p>
         </div>
-        <Button
-          size="sm"
-          variant={selected ? 'secondary' : 'default'}
+
+        <button
           onClick={() => togglePick(t)}
-          className="shrink-0 gap-1 px-3"
+          aria-label={selected ? 'Remove' : 'Add'}
+          className={cn(
+            'shrink-0 flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full transition-all',
+            selected
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-secondary text-foreground hover:bg-primary/20'
+          )}
         >
-          {selected ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-          <span>{selected ? 'Added' : 'Add'}</span>
-        </Button>
+          {selected ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+          {selected ? 'Added' : 'Add'}
+        </button>
       </div>
     );
   };
 
-  const sections: { id: Section; label: string; icon: React.ReactNode; badge?: number }[] = [
-    { id: 'trending', label: 'Trending', icon: <Flame className="w-4 h-4" /> },
-    { id: 'selected', label: 'Selected', icon: <ListMusic className="w-4 h-4" />, badge: picked.length || undefined },
-    { id: 'search', label: 'Search', icon: <Search className="w-4 h-4" /> },
+  const tabs: { id: Section; label: string; icon: React.ReactNode }[] = [
+    { id: 'trending', label: 'Trending', icon: <Flame    className="w-3.5 h-3.5" /> },
+    { id: 'search',   label: 'Search',   icon: <Search   className="w-3.5 h-3.5" /> },
+    { id: 'selected', label: `Queue${picked.length ? ` · ${picked.length}` : ''}`,
+                                          icon: <ListMusic className="w-3.5 h-3.5" /> },
   ];
-
-  // Auto-switch to Search section once the user starts typing
-  useEffect(() => {
-    if (query.trim() && section !== 'search') setSection('search');
-  }, [query]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl bg-card border-border p-0 overflow-hidden">
-        <DialogHeader className="px-4 pt-4">
-          <DialogTitle className="flex items-center gap-2">
-            <Music className="w-5 h-5" /> Add music
-            {picked.length > 0 && (
-              <span className="ml-auto text-xs font-normal text-muted-foreground">
-                {picked.length} selected
-              </span>
-            )}
+      <DialogContent className="sm:max-w-lg bg-card border-border p-0 overflow-hidden gap-0">
+        <DialogHeader className="px-5 pt-5 pb-3">
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <Music className="w-4 h-4 text-primary" />
+            Add music to status
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex h-[480px] border-t border-border">
-          {/* Side panel */}
-          <aside className="w-36 shrink-0 border-r border-border bg-secondary/30 p-2 flex flex-col gap-1">
-            {sections.map((s) => {
-              const active = section === s.id;
-              return (
-                <button
-                  key={s.id}
-                  onClick={() => setSection(s.id)}
-                  className={cn(
-                    'flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors',
-                    active
-                      ? 'bg-primary text-primary-foreground font-medium'
-                      : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-                  )}
-                >
-                  {s.icon}
-                  <span className="flex-1 text-left">{s.label}</span>
-                  {s.badge ? (
-                    <span className={cn(
-                      'text-[10px] font-mono px-1.5 py-0.5 rounded-full',
-                      active ? 'bg-primary-foreground/20' : 'bg-secondary'
-                    )}>
-                      {s.badge}
-                    </span>
-                  ) : null}
-                </button>
-              );
-            })}
-          </aside>
-
-          {/* Main panel */}
-          <section className="flex-1 flex flex-col min-w-0">
-            {/* Search bar (shown for trending + search) */}
-            {section !== 'selected' && (
-              <div className="p-3 border-b border-border">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    autoFocus
-                    placeholder="Search songs or artists..."
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    className="pl-9 bg-secondary border-0"
-                  />
-                </div>
-              </div>
-            )}
-
-            <div className="flex-1 overflow-y-auto overflow-x-hidden p-3">
-              {section === 'trending' && (
-                <>
-                  <div className="flex items-center gap-2 pb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    <Flame className="w-3.5 h-3.5 text-orange-500" /> Trending now
-                  </div>
-                  {trendingLoading && (
-                    <div className="flex justify-center py-6">
-                      <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-                    </div>
-                  )}
-                  {!trendingLoading && trending.length === 0 && (
-                    <p className="text-sm text-muted-foreground text-center py-6">
-                      No trending tracks available
-                    </p>
-                  )}
-                  <div className="space-y-1">{trending.map(renderRow)}</div>
-                </>
+        {/* Tabs */}
+        <div className="flex border-b border-border/60 px-3">
+          {tabs.map(t => (
+            <button
+              key={t.id}
+              onClick={() => setSection(t.id)}
+              className={cn(
+                'flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold transition-colors relative',
+                section === t.id
+                  ? 'text-primary'
+                  : 'text-muted-foreground hover:text-foreground'
               )}
-
-              {section === 'search' && (
-                <>
-                  {!query.trim() ? (
-                    <p className="text-sm text-muted-foreground text-center py-10">
-                      Type above to search songs or artists
-                    </p>
-                  ) : loading ? (
-                    <div className="flex justify-center py-6">
-                      <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : results.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-6">No results</p>
-                  ) : (
-                    <div className="space-y-1">{results.map(renderRow)}</div>
-                  )}
-                </>
+            >
+              {t.icon}{t.label}
+              {section === t.id && (
+                <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-primary rounded-full" />
               )}
-
-              {section === 'selected' && (
-                <>
-                  <div className="flex items-center gap-2 pb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    <ListMusic className="w-3.5 h-3.5" /> Your playlist · plays in order
-                  </div>
-                  {picked.length === 0 ? (
-                    <div className="text-center py-10 space-y-2">
-                      <p className="text-sm text-muted-foreground">No songs selected yet</p>
-                      <Button size="sm" variant="outline" onClick={() => setSection('trending')}>
-                        Browse trending
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="space-y-1">
-                      {picked.map((p, i) => (
-                        <div key={p.url} className="flex items-center gap-2 p-2 rounded-md bg-secondary/60">
-                          <span className="text-xs font-mono w-5 text-center text-muted-foreground">{i + 1}</span>
-                          <img src={p.artwork} alt="" className="w-10 h-10 rounded object-cover" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{p.title}</p>
-                            <p className="text-xs text-muted-foreground truncate">{p.artist}</p>
-                          </div>
-                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => move(i, -1)} disabled={i === 0}>
-                            <ArrowUp className="w-3.5 h-3.5" />
-                          </Button>
-                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => move(i, 1)} disabled={i === picked.length - 1}>
-                            <ArrowDown className="w-3.5 h-3.5" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-7 w-7"
-                            onClick={() => setPicked(picked.filter((_, k) => k !== i))}
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          </section>
+            </button>
+          ))}
         </div>
 
-        <div className="p-3 border-t border-border">
-          <Button onClick={confirm} disabled={picked.length === 0} className="w-full">
+        {/* Search bar (trending + search tabs) */}
+        {section !== 'selected' && (
+          <div className="px-4 pt-3 pb-1">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Search songs or artists…"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                className="pl-9 bg-secondary/60 border-0 focus-visible:ring-1 focus-visible:ring-primary h-9 text-sm"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Content area */}
+        <div className="h-[380px] overflow-y-auto overflow-x-hidden scrollbar-thin px-2 py-2">
+
+          {/* TRENDING */}
+          {section === 'trending' && (
+            <>
+              {!query.trim() && (
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest px-3 pb-2 flex items-center gap-1.5">
+                  <Flame className="w-3 h-3 text-orange-400" /> Trending now
+                </p>
+              )}
+              {trendingLoad && (
+                <div className="flex justify-center py-10">
+                  <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                </div>
+              )}
+              {!trendingLoad && trending.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-10">
+                  Could not load trending tracks
+                </p>
+              )}
+              <div className="space-y-0.5">
+                {(query.trim() ? results : trending).map(renderRow)}
+              </div>
+            </>
+          )}
+
+          {/* SEARCH */}
+          {section === 'search' && (
+            <>
+              {!query.trim() ? (
+                <div className="flex flex-col items-center justify-center h-full py-10 gap-2">
+                  <Search className="w-8 h-8 text-muted-foreground/40" />
+                  <p className="text-sm text-muted-foreground">Type above to search</p>
+                </div>
+              ) : loading ? (
+                <div className="flex justify-center py-10">
+                  <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : results.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-10">No results</p>
+              ) : (
+                <div className="space-y-0.5">{results.map(renderRow)}</div>
+              )}
+            </>
+          )}
+
+          {/* QUEUE / SELECTED */}
+          {section === 'selected' && (
+            <>
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest px-3 pb-2 flex items-center gap-1.5">
+                <ListMusic className="w-3 h-3" /> Playlist · plays in order
+              </p>
+              {picked.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-[280px] gap-3">
+                  <ListMusic className="w-8 h-8 text-muted-foreground/40" />
+                  <p className="text-sm text-muted-foreground">No songs added yet</p>
+                  <button
+                    onClick={() => setSection('trending')}
+                    className="text-xs text-primary font-medium hover:underline"
+                  >
+                    Browse trending →
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-1.5 px-1">
+                  {picked.map((p, i) => (
+                    <div
+                      key={p.url}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-secondary/60"
+                    >
+                      <span className="text-xs font-mono w-4 text-muted-foreground shrink-0">{i + 1}</span>
+                      <div className="relative w-10 h-10 shrink-0">
+                        <img src={p.artwork} alt="" className="w-10 h-10 rounded-lg object-cover" />
+                        <button
+                          onClick={() => togglePlay(p.url)}
+                          className="absolute inset-0 flex items-center justify-center bg-black/55 opacity-0 hover:opacity-100 rounded-lg transition-opacity"
+                        >
+                          {playingUrl === p.url
+                            ? <Pause className="w-3.5 h-3.5 text-white" fill="white" />
+                            : <Play  className="w-3.5 h-3.5 text-white" fill="white" />}
+                        </button>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate leading-tight">{p.title}</p>
+                        <p className="text-xs text-muted-foreground truncate">{p.artist}</p>
+                      </div>
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <Button size="icon" variant="ghost" className="h-7 w-7"
+                          onClick={() => move(i, -1)} disabled={i === 0}>
+                          <ArrowUp className="w-3 h-3" />
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-7 w-7"
+                          onClick={() => move(i, 1)} disabled={i === picked.length - 1}>
+                          <ArrowDown className="w-3 h-3" />
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                          onClick={() => setPicked(prev => prev.filter((_, k) => k !== i))}>
+                          <X className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-4 py-3 border-t border-border/60 bg-card">
+          <Button
+            onClick={confirm}
+            disabled={picked.length === 0}
+            className="w-full h-10 font-semibold"
+          >
             <Check className="w-4 h-4 mr-2" />
-            {picked.length === 0 ? 'Select at least one song' : `Use ${picked.length} song${picked.length > 1 ? 's' : ''}`}
+            {picked.length === 0
+              ? 'Select at least one song'
+              : `Use ${picked.length} song${picked.length > 1 ? 's' : ''}`}
           </Button>
         </div>
       </DialogContent>

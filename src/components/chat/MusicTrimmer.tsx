@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Play, Pause } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { MusicTrack } from './MusicPicker';
@@ -6,187 +6,294 @@ import type { MusicTrack } from './MusicPicker';
 interface Props {
   track: MusicTrack;
   onChange: (start: number, segment: number) => void;
-  totalDuration?: number; // defaults to 30 (iTunes preview length)
 }
 
-const BAR_COUNT = 64;
-const DEFAULT_TOTAL = 30;
-const SEGMENT = 15;
+const BAR_COUNT = 60;
 
-function hash(str: string) {
-  let h = 0;
-  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
-  return h;
-}
+// Clip length options — 0 means "full / play to end"
+const CLIP_OPTIONS = [
+  { label: '5s',   value: 5  },
+  { label: '10s',  value: 10 },
+  { label: '15s',  value: 15 },
+  { label: 'Full', value: 0  },
+];
 
-function generateBars(seed: string) {
-  const h0 = hash(seed);
-  const out: number[] = [];
-  let s = h0 || 1;
-  for (let i = 0; i < BAR_COUNT; i++) {
+function lcgBars(seed: string): number[] {
+  let s = 0;
+  for (let i = 0; i < seed.length; i++) s = (s * 31 + seed.charCodeAt(i)) | 0;
+  s = s || 1;
+  return Array.from({ length: BAR_COUNT }, (_, i) => {
     s = (s * 9301 + 49297) % 233280;
-    const r = s / 233280;
-    // smooth-ish wave
-    const wave = 0.5 + 0.5 * Math.sin((i / BAR_COUNT) * Math.PI * 4 + (h0 % 7));
-    out.push(0.25 + 0.75 * (0.6 * r + 0.4 * wave));
-  }
-  return out;
+    const noise = s / 233280;
+    const wave  = 0.5 + 0.5 * Math.sin((i / BAR_COUNT) * Math.PI * 6 + (s % 5));
+    return Math.max(0.08, Math.min(1, 0.3 * noise + 0.7 * wave));
+  });
 }
 
-function formatTime(s: number) {
-  const m = Math.floor(s / 60);
+function fmt(s: number) {
+  const m   = Math.floor(s / 60);
   const sec = Math.floor(s % 60);
   return `${m}:${sec.toString().padStart(2, '0')}`;
 }
 
-export default function MusicTrimmer({ track, onChange, totalDuration = DEFAULT_TOTAL }: Props) {
-  const segment = Math.min(SEGMENT, totalDuration);
-  const maxStart = Math.max(0, totalDuration - segment);
-  const [start, setStart] = useState(track.start ?? 0);
-  const [playing, setPlaying] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const trackRef = useRef<HTMLDivElement | null>(null);
-  const draggingRef = useRef<{ startX: number; baseStart: number } | null>(null);
+export default function MusicTrimmer({ track, onChange }: Props) {
+  // Actual audio duration — loaded async
+  const [total,      setTotal]      = useState(30);
+  // Clip length chosen by user; 0 = full
+  const [clipLen,    setClipLen]    = useState<number>(() => track.segment ?? 15);
+  const [start,      setStart]      = useState<number>(() => track.start   ?? 0);
+  const [playing,    setPlaying]    = useState(false);
 
-  const bars = useMemo(() => generateBars(track.url), [track.url]);
+  const audioRef  = useRef<HTMLAudioElement | null>(null);
+  const barRef    = useRef<HTMLDivElement | null>(null);
+  const dragRef   = useRef<{ startX: number; baseStart: number } | null>(null);
+  const startRef  = useRef(start);
+  const clipRef   = useRef(clipLen);
+  const totalRef  = useRef(total);
+  startRef.current = start;
+  clipRef.current  = clipLen;
+  totalRef.current = total;
 
-  // Notify parent on change
+  const bars = useMemo(() => lcgBars(track.url), [track.url]);
+
+  // Load actual duration from the audio file
   useEffect(() => {
-    onChange(start, segment);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [start, segment]);
+    const a = new Audio(track.url);
+    a.addEventListener('loadedmetadata', () => {
+      const dur = isFinite(a.duration) && a.duration > 0 ? a.duration : 30;
+      setTotal(dur);
+    }, { once: true });
+    a.load();
+  }, [track.url]);
 
+  // Reset when track changes
+  useEffect(() => {
+    setStart(track.start ?? 0);
+    setClipLen(track.segment ?? 15);
+    audioRef.current?.pause();
+    audioRef.current = null;
+    setPlaying(false);
+  }, [track.url]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Notify parent whenever start or clipLen changes
+  useEffect(() => {
+    onChange(start, clipLen);
+  }, [start, clipLen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Clamp start when clip length or total changes
+  useEffect(() => {
+    const effectiveLen = clipLen === 0 ? total : clipLen;
+    const max = Math.max(0, total - effectiveLen);
+    setStart(s => Math.min(s, max));
+  }, [clipLen, total]);
+
+  // Cleanup
   useEffect(() => () => { audioRef.current?.pause(); }, []);
 
-  const togglePreview = () => {
+  const effectiveSegment = clipLen === 0 ? total : clipLen;
+  const maxStart = Math.max(0, total - effectiveSegment);
+
+  // ── Preview playback ──────────────────────────────────────────────────────
+  const togglePreview = useCallback(() => {
     if (playing) {
       audioRef.current?.pause();
       setPlaying(false);
       return;
     }
-    const a = audioRef.current ?? new Audio(track.url);
-    audioRef.current = a;
-    a.currentTime = start;
-    a.play().catch(() => {});
-    setPlaying(true);
-    const onTime = () => {
-      if (a.currentTime >= start + segment) {
-        a.pause();
-        setPlaying(false);
-        a.removeEventListener('timeupdate', onTime);
-      }
-    };
-    a.addEventListener('timeupdate', onTime);
-    a.onended = () => setPlaying(false);
-  };
+    let a = audioRef.current;
+    if (!a) { a = new Audio(track.url); audioRef.current = a; }
 
-  const pixelsToSeconds = (dx: number) => {
-    const w = trackRef.current?.clientWidth ?? 1;
-    return (dx / w) * totalDuration;
-  };
+    const doPlay = () => {
+      const s   = startRef.current;
+      const seg = clipRef.current === 0 ? totalRef.current : clipRef.current;
+      try { a!.currentTime = s; } catch {}
+      a!.play().catch(() => {});
+      setPlaying(true);
+
+      const onTime = () => {
+        if (a!.currentTime >= startRef.current + (clipRef.current === 0 ? totalRef.current : clipRef.current)) {
+          a!.pause();
+          setPlaying(false);
+          a!.removeEventListener('timeupdate', onTime);
+        }
+      };
+      // For "Full" clip just let it play to end
+      if (clipRef.current !== 0) a!.addEventListener('timeupdate', onTime);
+      a!.onended = () => setPlaying(false);
+    };
+
+    if (a.readyState >= 1) doPlay();
+    else { a.addEventListener('loadedmetadata', doPlay, { once: true }); a.load(); }
+  }, [playing, track.url]);
+
+  // ── Drag ──────────────────────────────────────────────────────────────────
+  const pxToSec = (dx: number) => (dx / (barRef.current?.clientWidth ?? 1)) * total;
 
   const onPointerDown = (e: React.PointerEvent) => {
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    draggingRef.current = { startX: e.clientX, baseStart: start };
+    dragRef.current = { startX: e.clientX, baseStart: start };
+    e.stopPropagation();
   };
   const onPointerMove = (e: React.PointerEvent) => {
-    if (!draggingRef.current) return;
-    const dx = e.clientX - draggingRef.current.startX;
-    const next = Math.min(maxStart, Math.max(0, draggingRef.current.baseStart + pixelsToSeconds(dx)));
-    setStart(next);
+    if (!dragRef.current) return;
+    const next = dragRef.current.baseStart + pxToSec(e.clientX - dragRef.current.startX);
+    setStart(Math.max(0, Math.min(maxStart, next)));
   };
   const onPointerUp = (e: React.PointerEvent) => {
-    draggingRef.current = null;
+    dragRef.current = null;
     try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
   };
 
-  const startPct = (start / totalDuration) * 100;
-  const widthPct = (segment / totalDuration) * 100;
+  const startPct = total > 0 ? (start / total) * 100 : 0;
+  const widthPct = total > 0 ? (effectiveSegment / total) * 100 : 100;
 
   return (
-    <div className="space-y-2">
-      {/* Track info */}
+    <div className="space-y-3">
+      {/* Track info + time badge */}
       <div className="flex items-center gap-3">
         <button
+          type="button"
           onClick={togglePreview}
-          className="relative w-12 h-12 shrink-0 rounded-md overflow-hidden bg-secondary"
-          aria-label={playing ? 'Pause preview' : 'Play preview'}
+          className="relative w-11 h-11 shrink-0 rounded-lg overflow-hidden bg-secondary"
+          aria-label={playing ? 'Pause' : 'Play selected clip'}
         >
           <img src={track.artwork} alt="" className="w-full h-full object-cover" />
-          <span className="absolute inset-0 flex items-center justify-center bg-black/40">
-            {playing ? <Pause className="w-5 h-5 text-white" fill="white" /> : <Play className="w-5 h-5 text-white" fill="white" />}
+          <span className="absolute inset-0 flex items-center justify-center bg-black/45">
+            {playing
+              ? <Pause className="w-4 h-4 text-white" fill="white" />
+              : <Play  className="w-4 h-4 text-white" fill="white" />}
           </span>
         </button>
+
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold truncate">{track.title}</p>
+          <p className="text-sm font-semibold truncate leading-tight">{track.title}</p>
           <p className="text-xs text-muted-foreground truncate">{track.artist}</p>
         </div>
-        <div className="shrink-0 text-[11px] font-mono px-2 py-1 rounded-full bg-secondary border border-border">
-          {formatTime(start)} – {formatTime(start + segment)}
+
+        <div className="shrink-0 text-[11px] font-mono px-2.5 py-1 rounded-full bg-secondary/80 border border-border text-muted-foreground">
+          {clipLen === 0
+            ? `Full · ${fmt(total)}`
+            : `${fmt(start)} – ${fmt(start + clipLen)}`}
         </div>
       </div>
 
-      {/* Waveform + draggable window */}
-      <div
-        ref={trackRef}
-        className="relative h-14 rounded-xl bg-secondary/60 px-1 select-none touch-none overflow-hidden"
-      >
-        {/* Bars */}
-        <div className="absolute inset-0 flex items-center gap-[2px] px-1">
-          {bars.map((h, i) => (
-            <div
-              key={i}
-              className="flex-1 rounded-full bg-muted-foreground/40"
-              style={{ height: `${Math.round(h * 100)}%` }}
-            />
+      {/* Clip length selector */}
+      <div className="flex items-center gap-1.5">
+        <span className="text-[11px] text-muted-foreground font-medium shrink-0">Clip:</span>
+        <div className="flex gap-1">
+          {CLIP_OPTIONS.map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => setClipLen(opt.value)}
+              className={cn(
+                'px-3 py-1 rounded-full text-xs font-semibold transition-all',
+                clipLen === opt.value
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'bg-secondary/70 text-muted-foreground hover:bg-secondary hover:text-foreground'
+              )}
+            >
+              {opt.label}
+            </button>
           ))}
         </div>
-
-        {/* Highlighted window (Instagram-style gradient) */}
-        <div
-          className={cn(
-            'absolute top-0 bottom-0 rounded-xl',
-            'ring-2 ring-white shadow-lg cursor-grab active:cursor-grabbing',
-          )}
-          style={{
-            left: `${startPct}%`,
-            width: `${widthPct}%`,
-            background:
-              'linear-gradient(90deg, rgba(255,107,0,0.35), rgba(214,41,118,0.35), rgba(131,58,180,0.35))',
-          }}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
-        >
-          {/* Bars inside window in vivid gradient color (mask via mix-blend) */}
-          <div className="absolute inset-0 flex items-center gap-[2px] px-1 pointer-events-none overflow-hidden">
-            {bars.map((h, i) => {
-              const barPct = ((i + 0.5) / BAR_COUNT) * 100;
-              const inside = barPct >= startPct && barPct <= startPct + widthPct;
-              if (!inside) return <div key={i} className="flex-1" />;
-              return (
-                <div
-                  key={i}
-                  className="flex-1 rounded-full"
-                  style={{
-                    height: `${Math.round(h * 100)}%`,
-                    background:
-                      'linear-gradient(180deg, #ff6b00, #d62976 50%, #833ab4)',
-                  }}
-                />
-              );
-            })}
-          </div>
-          {/* segment seconds badge */}
-          <div className="absolute -top-2 left-1/2 -translate-x-1/2 text-[10px] font-bold bg-white text-black rounded-full px-1.5 py-[1px] shadow">
-            {segment}s
-          </div>
-        </div>
       </div>
 
-      <p className="text-[11px] text-muted-foreground text-center">
-        Drag the colored window to choose the part of the song to play
+      {/* Waveform — hidden when Full is selected (no trimming needed) */}
+      {clipLen !== 0 ? (
+        <div
+          ref={barRef}
+          className="relative h-12 rounded-xl overflow-hidden bg-secondary/50 select-none touch-none"
+        >
+          {/* Background bars */}
+          <div className="absolute inset-x-0 inset-y-0 flex items-end gap-[2px] px-1 pb-1">
+            {bars.map((h, i) => (
+              <div
+                key={i}
+                className="flex-1 rounded-sm bg-muted-foreground/20"
+                style={{ height: `${Math.round(h * 85)}%` }}
+              />
+            ))}
+          </div>
+
+          {/* Dim outside selection */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              background: `linear-gradient(to right,
+                rgba(0,0,0,0.55) 0%,
+                rgba(0,0,0,0.55) ${startPct}%,
+                transparent ${startPct}%,
+                transparent ${startPct + widthPct}%,
+                rgba(0,0,0,0.55) ${startPct + widthPct}%,
+                rgba(0,0,0,0.55) 100%)`,
+            }}
+          />
+
+          {/* Colored bars inside window */}
+          <div className="absolute inset-x-0 inset-y-0 flex items-end gap-[2px] px-1 pb-1 pointer-events-none">
+            {bars.map((h, i) => {
+              const bc = ((i + 0.5) / BAR_COUNT) * 100;
+              return bc >= startPct && bc <= startPct + widthPct ? (
+                <div
+                  key={i}
+                  className="flex-1 rounded-sm"
+                  style={{
+                    height: `${Math.round(h * 85)}%`,
+                    background: 'linear-gradient(180deg,#ff6b00 0%,#d62976 55%,#833ab4 100%)',
+                  }}
+                />
+              ) : <div key={i} className="flex-1" />;
+            })}
+          </div>
+
+          {/* Draggable window */}
+          <div
+            className="absolute top-0 bottom-0 rounded-xl border-2 border-white/80 cursor-grab active:cursor-grabbing shadow-lg shadow-black/40"
+            style={{ left: `${startPct}%`, width: `${widthPct}%` }}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+          >
+            <div className="absolute left-1 top-1/2 -translate-y-1/2 flex flex-col gap-0.5">
+              {[0,1,2].map(k => <div key={k} className="w-0.5 h-2 bg-white/70 rounded-full" />)}
+            </div>
+            <div className="absolute right-1 top-1/2 -translate-y-1/2 flex flex-col gap-0.5">
+              {[0,1,2].map(k => <div key={k} className="w-0.5 h-2 bg-white/70 rounded-full" />)}
+            </div>
+            <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 text-[9px] font-bold bg-white text-black rounded-full px-1.5 py-0.5 shadow whitespace-nowrap">
+              {clipLen}s
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* Full song — simple progress bar visual */
+        <div className="relative h-12 rounded-xl overflow-hidden bg-secondary/50">
+          <div className="absolute inset-x-0 inset-y-0 flex items-end gap-[2px] px-1 pb-1">
+            {bars.map((h, i) => (
+              <div
+                key={i}
+                className="flex-1 rounded-sm"
+                style={{
+                  height: `${Math.round(h * 85)}%`,
+                  background: 'linear-gradient(180deg,#ff6b00 0%,#d62976 55%,#833ab4 100%)',
+                  opacity: 0.7,
+                }}
+              />
+            ))}
+          </div>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="text-xs font-semibold text-white bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm">
+              Full song plays · {fmt(total)}
+            </span>
+          </div>
+        </div>
+      )}
+
+      <p className="text-[11px] text-muted-foreground text-center select-none">
+        {clipLen === 0
+          ? 'Entire preview will play on your status'
+          : 'Drag the window · choose clip length above'}
       </p>
     </div>
   );
